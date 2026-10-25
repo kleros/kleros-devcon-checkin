@@ -1,0 +1,4 @@
+# Static site, no build step: Netlify serves site/ as is.
+# site/_headers keeps config.js and matching.js uncached and the dashboard out of search engines.
+[build]
+  publish = "site"
