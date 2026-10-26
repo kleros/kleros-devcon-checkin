@@ -18,14 +18,23 @@ window.KLEROS_BOOTH_CONFIG = {
   // Merch tiers, shown above the form (so visitors know more steps mean better merch) and on the final screen.
   // Teal: check in and confirm the blog email. Purple: also join the Kleros Telegram (checked by @KlerosDevconBot)
   // and follow Kleros on X and LinkedIn. Gold: also get all 3 Kleros 101 questions right (quiz.js).
+  // One item per person, from their tier. Stock for Devcon VIII (from the supplier orders):
+  //   free     stickers, metallic tattoos (50 A5 sheets)
+  //   Teal     200 flip-flops
+  //   Purple   100 copper bottles + 100 gamchas = 200
+  //   Gold     100 kurtas (the 28 named kurtas are the team's)
+  // PoH charms (50) and PoH tees (50) are left out for now; their pictures are assets/merch/charm.jpg and tee.jpg.
+  // `reward` is shown on the ladder and the ticket, `short` inside sentences, `img` is one picture or several.
   // Change the rewards and pictures freely; keep three tiers.
   merch: {
+    free: { reward: 'Stickers and metallic tattoos', how: 'Free for everyone at the booth', img: 'assets/merch/tattoo.jpg' },
     tiers: [
-      { name: 'Teal', reward: 'Metallic tattoo', img: 'assets/merch/tattoo.jpg' },
-      { name: 'Purple', reward: 'Proof of Humanity charm', img: 'assets/merch/charm.jpg' },
-      { name: 'Gold', reward: 'Kleros kurta', img: 'assets/merch/kurta.jpg' }
+      { name: 'Teal', reward: 'Kleros flip-flops', short: 'Kleros flip-flops', img: ['assets/merch/flipflops.jpg'] },
+      { name: 'Purple', reward: 'Copper bottle or gamcha', short: 'a copper bottle or gamcha',
+        img: ['assets/merch/bottle.jpg', 'assets/merch/gamcha.jpg'] },
+      { name: 'Gold', reward: 'Kleros kurta', short: 'a Kleros kurta', img: ['assets/merch/kurta.jpg'] }
     ],
-    note: 'One per person, while stocks last'
+    note: 'One item per person, while stocks last'
   },
   telegram: { bot: 'KlerosDevconBot', group: 'https://t.me/kleros' },
   follow: { x: 'https://x.com/kleros_io', linkedin: 'https://www.linkedin.com/company/kleros/' },
