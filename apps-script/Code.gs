@@ -26,7 +26,8 @@
  *   GET  ?key=K&action=merch&id=ID&value=true      mark merch given (id = Client ID; ticket=T also works)
  *   GET  ?key=K&action=queue[&limit=N]             leads with Research status = Pending
  *   POST {action:'enrich', key, ticket, agent, fields:{...}}   research agent write-back
- *   POST {action:'verify', id}                     has this visitor confirmed their Kleros blog subscription? (page polls)
+ *   POST {action:'verify', id[, steps, tg]}        page polls: blog subscription confirmed? merch tier, Telegram,
+ *                                                  already claimed. Also records the page's merch steps.
  */
 
 // Drive folder the database lives in ("Kleros Booth Check-in · Devcon 2026" in the work Drive).
@@ -58,7 +59,11 @@ var GROUPS = [
   { name: 'Team follow-up', color: '#7a5200', cols: [
     'Status', 'Assigned to', 'Last contact', 'Team notes', 'Merch given', 'Returning visitor'] },
   { name: 'System', color: '#55565a', cols: [
-    'Priority rank', 'Level rank', 'Source', 'Event', 'Client ID'] }
+    'Priority rank', 'Level rank', 'Source', 'Event', 'Client ID'] },
+  // Last on purpose: added for merch tiers, after the Sheet was live (addMerchTierColumns).
+  { name: 'Merch tier', color: '#8a6200', cols: [
+    'Tier', 'Claim', 'Telegram check', 'Telegram account', 'Telegram ID',
+    'Followed X', 'Followed LinkedIn', 'Kleros 101', 'Quiz wrong picks', 'Steps updated'] }
 ];
 
 var HEADERS = [];
@@ -161,12 +166,23 @@ function buildLeads_() {
       SpreadsheetApp.newDataValidation().requireValueInList(LISTS[h], true).setAllowInvalid(true).build());
   });
   sh.getRange(3, col_('Merch given'), n, 1).insertCheckboxes();
+  sh.setConditionalFormatRules(formatRules_(sh));
 
+  var widths = { 'Name': 160, 'Company': 160, 'Next step': 280, 'Match reasons': 220, 'Company summary': 260,
+                 'Relevance to Kleros': 260, 'Flags': 240, 'Sources': 220, 'Team notes': 220, 'Kleros use case idea': 220 };
+  HEADERS.forEach(function (h, i) { sh.setColumnWidth(i + 1, widths[h] || 120); });
+  // System columns are for formulas and code; keep them out of the way.
+  sh.hideColumns(col_('Priority rank'), GROUPS[5].cols.length);
+}
+
+// Every colour rule on Leads (setting them replaces the old set, so this is safe to re-apply).
+function formatRules_(sh) {
+  var n = sh.getMaxRows() - 2;
   var rng = function (h) { return sh.getRange(3, col_(h), n, 1); };
   var rule = function (h, text, bg, fg) {
     return SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo(text).setBackground(bg).setFontColor(fg).setRanges([rng(h)]).build();
   };
-  sh.setConditionalFormatRules([
+  return [
     rule('Priority', 'Hot', '#ffd6e0', '#9b0034'),
     rule('Priority', 'Warm', '#fff1cc', '#7a5200'),
     rule('Priority', 'Nurture', '#e6f7f4', '#0b6b5c'),
@@ -174,14 +190,27 @@ function buildLeads_() {
     rule('Wants call', 'Yes', '#ffd6e0', '#9b0034'),
     rule('Research status', 'Pending', '#f1f1f4', '#55565a'),
     rule('Research status', 'Needs human', '#fff1cc', '#7a5200'),
-    SpreadsheetApp.newConditionalFormatRule().whenCellNotEmpty().setBackground('#fff1cc').setFontColor('#7a5200').setRanges([rng('Flags')]).build()
-  ]);
+    SpreadsheetApp.newConditionalFormatRule().whenCellNotEmpty().setBackground('#fff1cc').setFontColor('#7a5200').setRanges([rng('Flags')]).build(),
+    rule('Tier', 'Gold', '#fbe7b5', '#7a5200'),
+    rule('Tier', 'Purple', '#efe3ff', '#4d00b4'),
+    rule('Tier', 'Teal', '#dcf7f2', '#0b6b5c'),
+    rule('Claim', 'Already claimed', '#ffd6e0', '#9b0034')
+  ];
+}
 
-  var widths = { 'Name': 160, 'Company': 160, 'Next step': 280, 'Match reasons': 220, 'Company summary': 260,
-                 'Relevance to Kleros': 260, 'Flags': 240, 'Sources': 220, 'Team notes': 220, 'Kleros use case idea': 220 };
-  HEADERS.forEach(function (h, i) { sh.setColumnWidth(i + 1, widths[h] || 120); });
-  // System columns are for formulas and code; keep them out of the way.
-  sh.hideColumns(col_('Priority rank'), GROUPS[5].cols.length);
+/** One-off for a Sheet made before merch tiers: adds the Merch tier columns after System. Safe to run again. */
+function addMerchTierColumns() {
+  var sh = sheet_(LEADS);
+  if (sh.getMaxColumns() < HEADERS.length) sh.insertColumnsAfter(sh.getMaxColumns(), HEADERS.length - sh.getMaxColumns());
+  var g = GROUPS[GROUPS.length - 1], c = col_(g.cols[0]);
+  sh.showColumns(c, g.cols.length);   // new columns can inherit "hidden" from the System column before them
+  sh.getRange(1, c, 1, g.cols.length).setBackground(g.color).setFontColor('#ffffff').setFontWeight('bold');
+  sh.getRange(1, c).setValue(g.name);
+  sh.getRange(2, c, 1, g.cols.length).setValues([g.cols]).setBackground(g.color).setFontColor('#ffffff').setFontWeight('bold')
+    .setWrap(true).setVerticalAlignment('middle');
+  sh.setColumnWidths(c, g.cols.length, 120);
+  sh.setConditionalFormatRules(formatRules_(sh));
+  buildDashboard_();
 }
 
 // Columns every view shows, in this order.
@@ -271,7 +300,12 @@ function buildDashboard_() {
     ['Want a call', '=COUNTIF(' + colRef('Wants call') + ',"Yes")'],
     ['Flagged by research', '=COUNTIF(' + colRef('Flags') + ',"<>")'],
     ['Research pending', '=COUNTIF(' + colRef('Research status') + ',"Pending")'],
-    ['Merch given', '=COUNTIF(' + colRef('Merch given') + ',TRUE)']
+    ['Merch given', '=COUNTIF(' + colRef('Merch given') + ',TRUE)'],
+    ['Teal tier', '=COUNTIF(' + colRef('Tier') + ',"Teal")'],
+    ['Purple tier', '=COUNTIF(' + colRef('Tier') + ',"Purple")'],
+    ['Gold tier', '=COUNTIF(' + colRef('Tier') + ',"Gold")'],
+    ['Joined Telegram', '=COUNTIF(' + colRef('Telegram check') + ',"Joined")'],
+    ['Already claimed', '=COUNTIF(' + colRef('Claim') + ',"Already claimed")']
   ];
   sh.getRange(3, 1, kpis.length, 2).setValues(kpis);
   sh.getRange(3, 1, kpis.length, 1).setFontWeight('bold');
@@ -398,6 +432,15 @@ function findRow_(sh, header, value) {
   return -1;
 }
 
+// Like findRow_, but the most recent match.
+function findLastRow_(sh, header, value) {
+  var last = lastRow_(sh);
+  if (last < 3) return -1;
+  var vals = sh.getRange(3, col_(header), last - 2, 1).getValues();
+  for (var i = vals.length - 1; i >= 0; i--) if (String(vals[i][0]) === String(value)) return i + 3;
+  return -1;
+}
+
 function fitColumns_(m) {
   return [m.pipeline, m.primary, m.secondary, m.level, m.fitScore, m.priority, m.product, m.owner, m.nextStep, m.reasons];
 }
@@ -509,6 +552,8 @@ function get_(p) {
     if (row < 0 && p.ticket) row = findRow_(sh, 'Ticket', p.ticket);
     require_(row > 0, 'ticket not found');
     var giving = p.value !== 'false';
+    require_(!giving || sh.getRange(row, col_('Claim')).getValue() !== 'Already claimed',
+      'Already claimed: this email or Telegram account got merch on another check-in.');
     // Merch only once the visitor has confirmed their blog subscription. Checked live with Ghost, so it never
     // depends on what the visitor's page shows.
     if (giving && sh.getRange(row, col_('Newsletter')).getValue() !== 'Confirmed') {
@@ -592,17 +637,202 @@ function blogConfirmed_(email) {
   return ok;
 }
 
-/** Has this check-in's visitor confirmed their blog subscription? Uses the email saved with the check-in, never one sent with the request. */
+/**
+ * Status of a check-in, polled by the page: has the visitor confirmed their blog subscription (using the email
+ * saved with the check-in, never one sent with the request), and once they have, their merch tier, Telegram
+ * check and whether this is a second check-in ("Already claimed"). `steps` are the page's merch steps
+ * ({ x, linkedin, quiz, wrong }); `tg` says the page is waiting for the Telegram bot.
+ */
 function verify_(d) {
   if (!ghostConfig_()) return json_({ ok: true, confirmed: false, setup: false });   // no key yet: nobody passes
   var sh = sheet_(LEADS);
   var row = d.id ? findRow_(sh, 'Client ID', d.id) : -1;
   if (row < 0) return json_({ ok: true, confirmed: false, pending: true });   // check-in not saved yet
   var news = sh.getRange(row, col_('Newsletter'));
-  if (news.getValue() === 'Confirmed') return json_({ ok: true, confirmed: true });
-  var c = blogConfirmed_(sh.getRange(row, col_('Email')).getValue());
-  if (c) news.setValue('Confirmed');
-  return json_({ ok: true, confirmed: !!c });
+  if (news.getValue() !== 'Confirmed') {
+    if (!blogConfirmed_(sh.getRange(row, col_('Email')).getValue())) return json_({ ok: true, confirmed: false });
+    news.setValue('Confirmed');
+  }
+  var m = claim_(sh, row);
+  if (m['Claim'] === 'Claimed') {
+    var s = d.steps || {}, changes = {};
+    if (s.x) changes['Followed X'] = 'Tapped';
+    if (s.linkedin) changes['Followed LinkedIn'] = 'Tapped';
+    if (s.quiz) { changes['Kleros 101'] = 'Passed'; changes['Quiz wrong picks'] = Math.min(Math.max(Math.floor(Number(s.wrong)) || 0, 0), 99); }
+    if (d.tg && m['Telegram check'] !== 'Joined') { var tg = tgConfig_(); if (tg) telegramUpdates_(tg); }
+    m = merch_(sh, row, changes);
+  }
+  return json_(status_(m));
+}
+
+/* ---------------------------------------------------------- merch tiers */
+
+// Teal: checked in and confirmed the blog subscription. Purple: also joined the Kleros Telegram group (checked
+// by the bot) and tapped Follow on X and LinkedIn (counted on tap, not checked). Gold: also passed the Kleros 101
+// quiz on the page. The page shows the tier at the booth; the Sheet keeps it for the team.
+function tier_(m, newsletter) {
+  if (newsletter !== 'Confirmed' || m['Claim'] !== 'Claimed') return '';
+  var social = m['Telegram check'] === 'Joined' && m['Followed X'] === 'Tapped' && m['Followed LinkedIn'] === 'Tapped';
+  return !social ? 'Teal' : m['Kleros 101'] === 'Passed' ? 'Gold' : 'Purple';
+}
+
+// Reads this row's Merch tier columns, applies `changes`, keeps Tier in step, and writes them back in one go.
+function merch_(sh, row, changes) {
+  var cols = GROUPS[GROUPS.length - 1].cols, rng = sh.getRange(row, col_(cols[0]), 1, cols.length);
+  var vals = rng.getValues()[0], m = {}, dirty = false;
+  cols.forEach(function (h, i) { m[h] = vals[i]; });
+  Object.keys(changes || {}).forEach(function (h) { if (m[h] !== changes[h]) { m[h] = changes[h]; dirty = true; } });
+  var tier = tier_(m, sh.getRange(row, col_('Newsletter')).getValue());
+  if (tier !== m['Tier']) { m['Tier'] = tier; dirty = true; }
+  if (dirty) { m['Steps updated'] = new Date(); rng.setValues([cols.map(function (h) { return m[h]; })]); }
+  return m;
+}
+
+// One merch per person: the first check-in of an email to reach the final screen claims it. A later check-in
+// with the same email (from another phone or browser) gets "Already claimed" instead of a tier. Reopening the
+// page on the same phone is the same check-in, so it keeps its tier.
+function claim_(sh, row) {
+  var m = merch_(sh, row);
+  if (m['Claim']) return m;
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var last = lastRow_(sh);
+    var emails = sh.getRange(3, col_('Email'), last - 2, 1).getValues(), claims = sh.getRange(3, col_('Claim'), last - 2, 1).getValues();
+    if (claims[row - 3][0]) return merch_(sh, row);   // a parallel request got here first
+    var email = String(emails[row - 3][0]).trim().toLowerCase();
+    var taken = emails.some(function (e, i) { return i !== row - 3 && claims[i][0] === 'Claimed' && String(e[0]).trim().toLowerCase() === email; });
+    return merch_(sh, row, { 'Claim': taken ? 'Already claimed' : 'Claimed' });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+var TG_STATE = { 'Joined': 'joined', 'Not joined yet': 'not_member', 'Check failed': 'error' };
+function status_(m) {
+  if (m['Claim'] === 'Already claimed') {
+    return { ok: true, confirmed: true, claimed: m['Telegram check'] === 'Already used' ? 'telegram' : 'email' };
+  }
+  return { ok: true, confirmed: true, tier: m['Tier'],
+    telegram: TG_STATE[m['Telegram check']] || (tgConfig_() ? '' : 'offline'), telegramUser: String(m['Telegram account'] || ''),
+    steps: { x: m['Followed X'] === 'Tapped', linkedin: m['Followed LinkedIn'] === 'Tapped', quiz: m['Kleros 101'] === 'Passed' } };
+}
+
+/* ------------------------------------------------------------- telegram */
+
+// @KlerosDevconBot checks that a visitor joined the Kleros Telegram group. The page links to
+// t.me/KlerosDevconBot?start=<client id>; the visitor taps Start, and the backend reads the bot's new messages
+// (getUpdates) whenever a waiting page polls, and every minute from the trigger telegramSetup installs.
+// Needs TELEGRAM_BOT_TOKEN in Script properties (from @BotFather), and the bot added to the group as an admin:
+// Telegram only lets admins look up members. The token is part of every API URL, so never log a URL.
+var TG_MEMBER = ['creator', 'administrator', 'member'];
+
+function tgConfig_() {
+  var p = PropertiesService.getScriptProperties();
+  var token = String(p.getProperty('TELEGRAM_BOT_TOKEN') || '').trim();
+  if (!/^\d+:[\w-]{30,}$/.test(token)) return null;
+  var group = String(p.getProperty('TELEGRAM_GROUP') || '@kleros').trim();
+  return { token: token, group: group, groupUrl: 'https://t.me/' + group.replace(/^@/, ''),
+           site: String(p.getProperty('SITE_URL') || 'https://devcon.kleros.io').trim() };
+}
+
+// Bot API call. Failures come back as { ok: false } without the URL, so the token never reaches a response or log.
+function tgApi_(cfg, method, payload) {
+  try {
+    var res = UrlFetchApp.fetch('https://api.telegram.org/bot' + cfg.token + '/' + method,
+      { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload || {}), muteHttpExceptions: true });
+    return JSON.parse(res.getContentText());
+  } catch (err) {
+    return { ok: false, description: 'Telegram unreachable' };
+  }
+}
+
+function tgSay_(cfg, chatId, text, keyboard) {
+  tgApi_(cfg, 'sendMessage', keyboard ? { chat_id: chatId, text: text, reply_markup: { inline_keyboard: keyboard } } : { chat_id: chatId, text: text });
+}
+
+// Reads the bot's new messages and answers them: one reader at a time, at most every 2 seconds.
+function telegramUpdates_(cfg) {
+  var cache = CacheService.getScriptCache();
+  if (cache.get('tg:read')) return;
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return;   // another request is reading them (or saving a check-in); its turn
+  try {
+    cache.put('tg:read', '1', 2);
+    var props = PropertiesService.getScriptProperties();
+    var res = tgApi_(cfg, 'getUpdates', { offset: Number(props.getProperty('TELEGRAM_OFFSET') || 0), limit: 50, timeout: 0,
+                                          allowed_updates: ['message', 'callback_query'] });
+    if (!res.ok || !res.result.length) return;
+    var sh = sheet_(LEADS);
+    res.result.forEach(function (u) {
+      try { tgUpdate_(cfg, sh, u); } catch (err) { /* one odd message never blocks the rest */ }
+    });
+    props.setProperty('TELEGRAM_OFFSET', String(res.result[res.result.length - 1].update_id + 1));
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// "/start <client id>" from the page's link, "/check" or the "I've joined" button after joining the group.
+function tgUpdate_(cfg, sh, u) {
+  var q = u.callback_query, msg = u.message;
+  if (q) tgApi_(cfg, 'answerCallbackQuery', { callback_query_id: q.id });
+  var from = q ? q.from : msg && msg.from;
+  // As a group admin the bot also receives the group's messages: skipped, never stored.
+  if (!from || from.is_bot || (msg && msg.chat.type !== 'private')) return;
+  var text = q ? '/check' : String(msg.text || '').trim();
+  var start = /^\/start\s+([A-Za-z0-9_-]{1,64})$/.exec(text);
+  var row = start ? findRow_(sh, 'Client ID', start[1]) : /^\/(start|check)\b/.test(text) ? findLastRow_(sh, 'Telegram ID', from.id) : -1;
+  if (row < 0) return tgSay_(cfg, from.id, 'Hi! I check that visitors to the Kleros booth at Devcon joined the Kleros Telegram group. Start from the check-in page: ' + cfg.site);
+
+  var m = merch_(sh, row);
+  if (sh.getRange(row, col_('Newsletter')).getValue() !== 'Confirmed') return tgSay_(cfg, from.id, 'Confirm your email on the check-in page first, then tap the Telegram button there again.');
+  if (m['Claim'] === 'Already claimed') return tgSay_(cfg, from.id, 'This check-in was already claimed: one merch per person.');
+  if (m['Telegram check'] === 'Joined') return tgSay_(cfg, from.id, '✅ You’re already verified. Switch back to your browser to see your merch tier.');
+  var who = { 'Telegram ID': from.id, 'Telegram account': text_(from.username ? '@' + from.username : [from.first_name, from.last_name].join(' ').trim()) };
+
+  // One Telegram account unlocks one check-in.
+  var last = lastRow_(sh), tg = sh.getRange(3, col_('Telegram check'), last - 2, 3).getValues();   // check, account, ID
+  var used = tg.some(function (r, i) { return i !== row - 3 && r[0] === 'Joined' && String(r[2]) === String(from.id); });
+  if (used) {
+    merch_(sh, row, { 'Claim': 'Already claimed', 'Telegram check': 'Already used', 'Telegram ID': who['Telegram ID'], 'Telegram account': who['Telegram account'] });
+    return tgSay_(cfg, from.id, 'This Telegram account already unlocked a check-in at the Kleros booth. One merch per person!');
+  }
+
+  var cm = tgApi_(cfg, 'getChatMember', { chat_id: cfg.group, user_id: from.id });
+  var joined = cm.ok && (TG_MEMBER.indexOf(cm.result.status) >= 0 || (cm.result.status === 'restricted' && cm.result.is_member));
+  who['Telegram check'] = !cm.ok ? 'Check failed' : joined ? 'Joined' : 'Not joined yet';
+  merch_(sh, row, who);
+  if (!cm.ok) return tgSay_(cfg, from.id, 'I couldn’t check the Kleros group just now. Try again in a minute, or ask the Kleros team at the booth.', [[{ text: 'Try again', callback_data: 'check' }]]);
+  if (joined) return tgSay_(cfg, from.id, '✅ You’re in the Kleros group, thanks for joining! Switch back to your browser: your merch tier updates by itself.');
+  tgSay_(cfg, from.id, 'Almost there! Join the Kleros group first, then tap “I’ve joined”.',
+    [[{ text: 'Join the Kleros group', url: cfg.groupUrl }], [{ text: 'I’ve joined', callback_data: 'check' }]]);
+}
+
+/** Run once after adding TELEGRAM_BOT_TOKEN: checks the bot and its group, and answers visitors every minute even when no page is polling. */
+function telegramSetup() {
+  var cfg = tgConfig_();
+  if (!cfg) { Logger.log('NOT SET UP: no valid TELEGRAM_BOT_TOKEN in Script properties.'); return; }
+  var me = tgApi_(cfg, 'getMe');
+  if (!me.ok) { Logger.log('Telegram refused the token: ' + me.description); return; }
+  tgApi_(cfg, 'deleteWebhook');   // getUpdates only works without a webhook
+  tgApi_(cfg, 'setMyCommands', { commands: [{ command: 'check', description: 'Check that I joined the Kleros group' }] });
+  var bot = tgApi_(cfg, 'getChatMember', { chat_id: cfg.group, user_id: me.result.id });
+  Logger.log('Bot @' + me.result.username + ' in ' + cfg.group + ': ' + (bot.ok ? bot.result.status : bot.description) +
+    (bot.ok && bot.result.status === 'administrator' ? ' (good)' : '. A group admin must add the bot as an admin, or no visitor can be checked.'));
+  var has = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'telegramTick'; });
+  if (!has) ScriptApp.newTrigger('telegramTick').timeBased().everyMinutes(1).create();
+  Logger.log('Answering the bot every minute (trigger telegramTick). Run telegramStop after Devcon.');
+}
+
+function telegramTick() {
+  var cfg = tgConfig_();
+  if (cfg) telegramUpdates_(cfg);
+}
+
+/** After Devcon: stop the every-minute bot check. */
+function telegramStop() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'telegramTick') ScriptApp.deleteTrigger(t); });
 }
 
 /** Run from the editor after adding the key: says whether the gate is on and Ghost answers. */
