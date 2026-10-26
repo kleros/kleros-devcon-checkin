@@ -19,7 +19,7 @@ window.KLEROS_BOOTH_CONFIG = {
   // Teal: check in and confirm the blog email. Purple: also join the Kleros Telegram (checked by @KlerosDevconBot)
   // and follow Kleros on X and LinkedIn. Gold: also get all 3 Kleros 101 questions right (quiz.js).
   // One item per person, from their tier. Stock for Devcon VIII (from the supplier orders):
-  //   free     stickers, metallic tattoos (50 A5 sheets)
+  //   free     GTA stickers (7 designs x 100), metallic tattoos (50 A5 sheets)
   //   Teal     200 flip-flops
   //   Purple   100 copper bottles + 100 gamchas = 200
   //   Gold     100 kurtas (the 28 named kurtas are the team's)
@@ -27,7 +27,8 @@ window.KLEROS_BOOTH_CONFIG = {
   // `reward` is shown on the ladder and the ticket, `short` inside sentences, `img` is one picture or several.
   // Change the rewards and pictures freely; keep three tiers.
   merch: {
-    free: { reward: 'Stickers and metallic tattoos', how: 'Free for everyone at the booth', img: 'assets/merch/tattoo.jpg' },
+    free: { reward: 'Stickers and metallic tattoos', how: 'Free for everyone at the booth',
+            img: ['assets/merch/stickers.jpg', 'assets/merch/tattoo.jpg'] },
     tiers: [
       { name: 'Teal', reward: 'Kleros flip-flops', short: 'Kleros flip-flops', img: ['assets/merch/flipflops.jpg'] },
       { name: 'Purple', reward: 'Copper bottle or gamcha', short: 'a copper bottle or gamcha',
