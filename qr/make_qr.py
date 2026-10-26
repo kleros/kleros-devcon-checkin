@@ -31,6 +31,7 @@ FONTS = os.path.join(HERE, "fonts")
 NIGHT, NIGHT_2, DUSK = (15, 10, 46), (29, 16, 80), (52, 24, 112)
 KLEROS, KLEROS_DEEP = (144, 19, 254), (77, 0, 180)
 GOLD, LILAC, MUTED, WHITE = (242, 196, 109), (199, 182, 255), (184, 172, 220), (255, 255, 255)
+PINK, TEAL, VIOLET, SITE_DUSK = (222, 79, 208), (127, 240, 224), (183, 123, 255), (75, 35, 145)
 # QR ink: violet into the blue edge of the icosahedron (both well over 6:1 on white)
 INK_A, INK_B = (77, 0, 180), (40, 72, 206)
 # Finder-eye corner radii in modules (outer, hole, centre). Rounder eyes look softer but some
@@ -252,28 +253,237 @@ def logo(img, cx, y, width):
     return y + h
 
 
+# ---------- the check-in site's look, for the booth poster ----------
+
+def svg_subpaths(d, k, ox=0.0, oy=0.0):
+    """Absolute M/L/H/V/C/Z path data (all the Kleros logo uses) as polygons, cubics flattened."""
+    toks = re.findall(r"[MLHVCZ]|-?\d*\.?\d+(?:e-?\d+)?", d)
+    polys, cur, x, y, i, cmd = [], [], 0.0, 0.0, 0, None
+    num = lambda: float(toks[i])
+    while i < len(toks):
+        if toks[i] in "MLHVCZ":
+            cmd = toks[i]; i += 1
+            if cmd == "Z":
+                polys.append(cur); cur = []
+            continue
+        if cmd == "M" or cmd == "L":
+            x, y = num(), float(toks[i + 1]); i += 2
+            if cmd == "M" and cur:
+                polys.append(cur); cur = []
+            cur.append((x, y)); cmd = "L" if cmd == "M" else cmd
+        elif cmd == "H":
+            x = num(); i += 1; cur.append((x, y))
+        elif cmd == "V":
+            y = num(); i += 1; cur.append((x, y))
+        elif cmd == "C":
+            x1, y1, x2, y2, x3, y3 = (float(t) for t in toks[i:i + 6]); i += 6
+            for s in range(1, 13):
+                t = s / 12
+                cur.append(((1 - t) ** 3 * x + 3 * (1 - t) ** 2 * t * x1 + 3 * (1 - t) * t * t * x2 + t ** 3 * x3,
+                            (1 - t) ** 3 * y + 3 * (1 - t) ** 2 * t * y1 + 3 * (1 - t) * t * t * y2 + t ** 3 * y3))
+            x, y = x3, y3
+    if cur:
+        polys.append(cur)
+    return [[((px + ox) * k, (py + oy) * k) for px, py in p] for p in polys if len(p) > 2]
+
+
+def svg_mask(name, width):
+    """An SVG from site/assets as an alpha mask `width` px wide, filled even-odd (holes stay open)."""
+    svg = open(os.path.join(ASSETS, name), encoding="utf-8").read()
+    vw, vh = map(float, re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg).groups())
+    t = re.search(r'translate\(([\d.]+),\s*([\d.]+)\)', svg)
+    ox, oy = map(float, t.groups()) if t else (0.0, 0.0)
+    ss = 4
+    k = width * ss / vw
+    W, H = int(vw * k), int(vh * k)
+    mask = Image.new("L", (W, H), 0)
+    for d in re.findall(r'<path[^>]* d="([^"]+)"', svg):
+        for poly in svg_subpaths(d, k, ox, oy):
+            layer = Image.new("L", (W, H), 0)
+            ImageDraw.Draw(layer).polygon(poly, fill=255)
+            mask = ImageChops.logical_xor(mask.convert("1"), layer.convert("1")).convert("L")
+    mask = mask.resize((W // ss, H // ss), Image.LANCZOS)
+    return mask.crop(mask.getbbox())
+
+
+def site_background(w, h):
+    """index.html's body: night to dusk, a pink glow from the bottom, a faint teal one top right, stars."""
+    small = Image.new("RGB", (8, 256))
+    px = small.load()
+    for yy in range(256):
+        t = yy / 255
+        a, b, k = (NIGHT, NIGHT_2, t / 0.45) if t < 0.45 else (NIGHT_2, SITE_DUSK, (t - 0.45) / 0.55)
+        for xx in range(8):
+            px[xx, yy] = tuple(int(a[i] + (b[i] - a[i]) * k) for i in range(3))
+    bg = small.resize((w, h), Image.BILINEAR).convert("RGBA")
+    glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gd.ellipse((w * -0.2, h * 0.72, w * 1.2, h * 1.35), fill=PINK + (95,))
+    gd.ellipse((w * 0.55, h * -0.12, w * 1.25, h * 0.22), fill=TEAL + (28,))
+    gd.ellipse((w * 0.05, h * 0.36, w * 0.95, h * 0.86), fill=KLEROS + (40,))
+    bg = Image.alpha_composite(bg, glow.filter(ImageFilter.GaussianBlur(w // 7)))
+    stars = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(stars)
+    import random
+    rnd = random.Random(8)                       # same stars every run
+    for _ in range(90):
+        x, y, r = rnd.uniform(0, w), rnd.uniform(0, h), rnd.choice((1.5, 2, 2, 2.5, 3.5))
+        if w * 0.16 < x < w * 0.84:              # keep the text column clear
+            continue
+        sd.ellipse((x - r, y - r, x + r, y + r), fill=WHITE + (rnd.randint(70, 150),))
+    bg = Image.alpha_composite(bg, stars)
+    grain = Image.effect_noise((w, h), 22).convert("RGBA")
+    grain.putalpha(8)
+    return Image.alpha_composite(bg, grain)
+
+
+def float_mark(img, cx, cy, width, colour, alpha, angle):
+    """One of the site's drifting icosahedrons: the flat mark, tinted, rotated, with a glow."""
+    m = svg_mask("kleros-symbol-white-flat.svg", width).rotate(angle, resample=Image.BICUBIC, expand=True)
+    tile = Image.new("RGBA", m.size, colour + (0,))
+    tile.putalpha(m.point(lambda v: v * alpha // 255))
+    glow = Image.new("RGBA", m.size, colour + (0,))
+    glow.putalpha(m.point(lambda v: v * alpha // 400).filter(ImageFilter.GaussianBlur(width // 12)))
+    pos = (int(cx - m.width / 2), int(cy - m.height / 2))
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    layer.alpha_composite(glow, (max(pos[0], 0), max(pos[1], 0)), (max(-pos[0], 0), max(-pos[1], 0)))
+    layer.alpha_composite(tile, (max(pos[0], 0), max(pos[1], 0)), (max(-pos[0], 0), max(-pos[1], 0)))
+    img.alpha_composite(layer)
+
+
+def deco_frame(img, inset, s):
+    """The thin gold frame with art-deco corners that sits around the check-in page."""
+    w, h = img.size
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    line = max(2, s // 14)
+    d.rounded_rectangle((inset, inset, w - inset, h - inset), radius=s // 5, outline=GOLD + (95,), width=line)
+    corner = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    cd = ImageDraw.Draw(corner)
+    u = s / 34                                   # the site's corner is drawn on a 34-unit grid
+    c = GOLD + (215,)
+    cd.line([(5 * u, 33 * u), (5 * u, 5 * u), (33 * u, 5 * u)], fill=c, width=line)
+    cd.line([(9 * u, 33 * u), (9 * u, 9 * u), (33 * u, 9 * u)], fill=c, width=line)
+    cd.line([(5 * u, 5 * u), (14 * u, 14 * u)], fill=c, width=line)
+    cd.polygon([(14 * u, 9.8 * u), (18.2 * u, 14 * u), (14 * u, 18.2 * u), (9.8 * u, 14 * u)], outline=c, width=line)
+    o = inset - int(5 * u)
+    layer.alpha_composite(corner, (o, o))
+    layer.alpha_composite(corner.transpose(Image.FLIP_LEFT_RIGHT), (w - o - s, o))
+    layer.alpha_composite(corner.transpose(Image.FLIP_TOP_BOTTOM), (o, h - o - s))
+    layer.alpha_composite(corner.transpose(Image.ROTATE_180), (w - o - s, h - o - s))
+    img.alpha_composite(layer)
+
+
+def white_wordmark(img, x, y, width):
+    m = svg_mask("logo-kleros-white.svg", width)
+    tile = Image.new("RGBA", m.size, WHITE + (0,))
+    tile.putalpha(m)
+    img.alpha_composite(tile, (int(x), int(y)))
+    return m.size
+
+
+def badge(img, right, cy, text, f):
+    """Gold hairline pill, right-aligned, like the edition badge in the site header."""
+    tracking = f.size * 0.16
+    tw = text_width(text, f, tracking)
+    pad, h = f.size * 1.0, int(f.size * 2.3)
+    x0 = int(right - tw - pad * 2)
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(layer).rounded_rectangle((x0, cy - h // 2, right, cy + h // 2), radius=h // 2, outline=GOLD + (120,), width=max(2, f.size // 14))
+    img.alpha_composite(layer)
+    asc, desc = f.getmetrics()
+    draw_text(img, (x0 + pad, cy - (asc + desc) / 2 + f.size * 0.08), text, f, GOLD, tracking)
+
+
+def gradient_gem(img, cx, y, width):
+    """The site's hero mark: the icosahedron in gold, white and violet, glowing."""
+    m = svg_mask("kleros-symbol-white-flat.svg", width)
+    w, h = m.size
+    fill = Image.new("RGB", (w, h))
+    p = fill.load()
+    for yy in range(h):
+        for xx in range(w):
+            t = (xx / w * 0.53 + yy / h * 0.47)
+            a, b, k = (GOLD, WHITE, t / 0.45) if t < 0.45 else (WHITE, VIOLET, (t - 0.45) / 0.55)
+            p[xx, yy] = tuple(int(a[i] + (b[i] - a[i]) * k) for i in range(3))
+    fill = fill.convert("RGBA")
+    fill.putalpha(m)
+    halo = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    hd = ImageDraw.Draw(halo)
+    r = width * 0.7
+    hd.ellipse((cx - r, y + h / 2 - r, cx + r, y + h / 2 + r), fill=VIOLET + (90,))
+    img.alpha_composite(halo.filter(ImageFilter.GaussianBlur(width // 3)))
+    img.alpha_composite(fill, (int(cx - w / 2), int(y)))
+    return y + h
+
+
+def framed_qr_card(img, x0, y0, card, qr):
+    """White QR card inside a thin gold-to-pink-to-violet ring, with a violet glow behind."""
+    ring = max(6, card // 130)
+    glow = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(glow).rounded_rectangle((x0 - 30, y0 - 10, x0 + card + 30, y0 + card + 50), radius=card // 12, fill=(120, 40, 255, 150))
+    img.alpha_composite(glow.filter(ImageFilter.GaussianBlur(card // 16)))
+    grad = gradient((card + 2 * ring, card + 2 * ring), GOLD, KLEROS).convert("RGBA")
+    rm = Image.new("L", grad.size, 0)
+    ImageDraw.Draw(rm).rounded_rectangle((0, 0, grad.width - 1, grad.height - 1), radius=card // 14 + ring, fill=255)
+    grad.putalpha(rm)
+    img.alpha_composite(grad, (x0 - ring, y0 - ring))
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(layer).rounded_rectangle((x0, y0, x0 + card, y0 + card), radius=card // 14, fill=WHITE + (255,))
+    img.alpha_composite(layer)
+    img.alpha_composite(qr_image(qr), (x0 + (card - qr) // 2, y0 + (card - qr) // 2))
+
+
+def tagline(img, y, f):
+    """The site footer: DECENTRALISED JUSTICE · HUMAN JURORS · REAL IMPACT, the middle in gold."""
+    parts = [("DECENTRALISED JUSTICE  ·  ", MUTED), ("HUMAN JURORS", GOLD), ("  ·  REAL IMPACT", MUTED)]
+    tr = f.size * 0.14
+    total = sum(text_width(t, f, tr) for t, _ in parts) + tr * 2
+    x = (img.width - total) / 2
+    for t, c in parts:
+        draw_text(img, (x, y), t, f, c, tr)
+        x += text_width(t, f, tr) + tr
+
+
 def poster():
     W, H = 1800, 2400
-    img = background(W, H)
-    y = logo(img, W / 2, 160, 290)
-    gradient_headline(img, y + 60, HEADLINE, urbanist(148))
-    y = perk_pill(img, y + 290, PERK, urbanist(50, "SemiBold"))
-    card, qr = 1180, 940
-    qr_card(img, (W - card) // 2, y + 90, card, qr)
-    y += 90 + card
-    centered(img, y + 80, DOMAIN, mono(70), WHITE, tracking=4)
-    centered(img, y + 190, CAPTION, urbanist(42, "Medium"), MUTED)
+    img = site_background(W, H)
+    for cx, cy, w, colour, a, ang in ((60, 610, 250, GOLD, 80, -14), (1745, 1180, 430, VIOLET, 75, 16),
+                                      (95, 1760, 170, TEAL, 95, 28), (1705, 330, 175, TEAL, 70, -8),
+                                      (1650, 2130, 300, GOLD, 60, 22), (150, 2260, 120, VIOLET, 70, -20)):
+        float_mark(img, cx, cy, w, colour, a, ang)
+    deco_frame(img, 46, 102)
+
+    ww, wh = white_wordmark(img, 150, 125, 330)
+    badge(img, W - 150, 125 + wh / 2, "DEVCON VIII · MUMBAI", urbanist(34, "Bold"))
+
+    y = gradient_gem(img, W / 2, 285, 205)
+    centered(img, y + 40, "TRUST AT MACHINE SPEED", urbanist(40, "Bold"), GOLD, tracking=7)
+    gradient_headline(img, y + 105, HEADLINE, urbanist(146))
+    y = perk_pill(img, y + 320, PERK, urbanist(48, "SemiBold"))
+    card, qr = 1030, 850
+    framed_qr_card(img, (W - card) // 2, y + 70, card, qr)
+    y += 70 + card
+    centered(img, y + 62, DOMAIN, mono(66), WHITE, tracking=4)
+    centered(img, y + 158, CAPTION, urbanist(40, "Medium"), MUTED)
+    tagline(img, H - 175, urbanist(32, "SemiBold"))
     return img.convert("RGB")
 
 
 def square():
     W = H = 1500
-    img = background(W, H)
-    gradient_headline(img, 95, HEADLINE, urbanist(112))
-    y = perk_pill(img, 265, PERK, urbanist(40, "SemiBold"))
-    card, qr = 900, 720
-    qr_card(img, (W - card) // 2, y + 60, card, qr)
-    centered(img, y + 60 + card + 58, DOMAIN, mono(56), WHITE, tracking=3)
+    img = site_background(W, H)
+    for cx, cy, w, colour, a, ang in ((55, 470, 200, GOLD, 80, -14), (1450, 900, 300, VIOLET, 75, 16),
+                                      (80, 1220, 140, TEAL, 95, 28), (1420, 260, 140, TEAL, 70, -8)):
+        float_mark(img, cx, cy, w, colour, a, ang)
+    deco_frame(img, 38, 86)
+    ww, wh = white_wordmark(img, 115, 95, 260)
+    badge(img, W - 115, 95 + wh / 2, "DEVCON VIII · MUMBAI", urbanist(28, "Bold"))
+    gradient_headline(img, 200, HEADLINE, urbanist(112))
+    y = perk_pill(img, 362, PERK, urbanist(38, "SemiBold"))
+    card, qr = 820, 676
+    framed_qr_card(img, (W - card) // 2, y + 52, card, qr)
+    centered(img, y + 52 + card + 46, DOMAIN, mono(54), WHITE, tracking=3)
     return img.convert("RGB")
 
 
