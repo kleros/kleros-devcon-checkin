@@ -7,6 +7,7 @@ mark, Urbanist + Space Mono, and a crisp violet-to-blue QR with the Kleros mark 
 
 Writes into qr/:
   devcon-kleros-qr-poster.png   1800x2400 portrait card (6x8 in at 300 dpi) for a table stand
+  devcon-kleros-qr-poster-a4.png/.pdf   the same poster on A4 (2480x3508 at 300 dpi), PDF ready to print
   devcon-kleros-qr-square.png   1500x1500 sticker / social square
   devcon-kleros-qr-plain.png    QR only on white, for designers to drop into other artwork
   devcon-kleros-qr-plain.svg    QR only, vector, same styling, for large-format print
@@ -445,28 +446,34 @@ def tagline(img, y, f):
         x += text_width(t, f, tr) + tr
 
 
-def poster():
-    W, H = 1800, 2400
+def poster(W=1800, H=2400):
+    """Drawn on a 1800x2400 grid (6x8 in) and scaled to W; a taller page (A4) spreads the extra height
+    over the gaps, so the design stays the same."""
+    k = W / 1800
+    s = lambda v: int(round(v * k))
+    extra = H - 2400 * k                         # 0 for 6x8 in, about 200 px for A4
     img = site_background(W, H)
     for cx, cy, w, colour, a, ang in ((60, 610, 250, GOLD, 80, -14), (1745, 1180, 430, VIOLET, 75, 16),
                                       (95, 1760, 170, TEAL, 95, 28), (1705, 330, 175, TEAL, 70, -8),
                                       (1650, 2130, 300, GOLD, 60, 22), (150, 2260, 120, VIOLET, 70, -20)):
-        float_mark(img, cx, cy, w, colour, a, ang)
-    deco_frame(img, 46, 102)
+        float_mark(img, cx * k, cy * H / 2400, s(w), colour, a, ang)
+    deco_frame(img, s(46), s(102))
 
-    ww, wh = white_wordmark(img, 150, 125, 330)
-    badge(img, W - 150, 125 + wh / 2, "DEVCON VIII · MUMBAI", urbanist(34, "Bold"))
+    ww, wh = white_wordmark(img, s(150), s(125), s(330))
+    badge(img, W - s(150), s(125) + wh / 2, "DEVCON VIII · MUMBAI", urbanist(s(34), "Bold"))
 
-    y = gradient_gem(img, W / 2, 285, 205)
-    centered(img, y + 40, "TRUST AT MACHINE SPEED", urbanist(40, "Bold"), GOLD, tracking=7)
-    gradient_headline(img, y + 105, HEADLINE, urbanist(146))
-    y = perk_pill(img, y + 320, PERK, urbanist(48, "SemiBold"))
-    card, qr = 1030, 850
-    framed_qr_card(img, (W - card) // 2, y + 70, card, qr)
-    y += 70 + card
-    centered(img, y + 62, DOMAIN, mono(66), WHITE, tracking=4)
-    centered(img, y + 158, CAPTION, urbanist(40, "Medium"), MUTED)
-    tagline(img, H - 175, urbanist(32, "SemiBold"))
+    y = gradient_gem(img, W / 2, s(285) + extra * 0.25, s(205))
+    y += extra * 0.1
+    centered(img, y + s(40), "TRUST AT MACHINE SPEED", urbanist(s(40), "Bold"), GOLD, tracking=7 * k)
+    gradient_headline(img, y + s(105), HEADLINE, urbanist(s(146)))
+    y = perk_pill(img, int(y + s(320) + extra * 0.1), PERK, urbanist(s(48), "SemiBold"))
+    card, qr = s(1030), s(850)
+    y += s(70) + extra * 0.25
+    framed_qr_card(img, (W - card) // 2, int(y), card, qr)
+    y += card
+    centered(img, y + s(62), DOMAIN, mono(s(66)), WHITE, tracking=4 * k)
+    centered(img, y + s(158), CAPTION, urbanist(s(40), "Medium"), MUTED)
+    tagline(img, H - s(175), urbanist(s(32), "SemiBold"))
     return img.convert("RGB")
 
 
@@ -570,9 +577,12 @@ def self_check(paths):
 
 if __name__ == "__main__":
     out = []
-    for name, fn in (("poster", poster), ("square", square), ("plain", plain)):
+    for name, fn in (("poster", poster), ("poster-a4", lambda: poster(2480, 3508)), ("square", square), ("plain", plain)):
         p = os.path.join(HERE, f"devcon-kleros-qr-{name}.png")
-        fn().save(p, dpi=(300, 300))
+        im = fn()
+        im.save(p, dpi=(300, 300))
+        if name == "poster-a4":
+            im.save(p[:-4] + ".pdf", resolution=300)
         out.append(p)
     print("encoded:", URL)
     self_check(out)
