@@ -28,6 +28,7 @@
  *   POST {action:'enrich', key, ticket, agent, fields:{...}}   research agent write-back
  *   POST {action:'verify', id[, steps, tg]}        page polls: blog subscription confirmed? merch tier, Telegram,
  *                                                  already claimed. Also records the page's merch steps.
+ *   POST ?hook=ghost&secret=S {Ghost webhook}      Ghost: member.added / member.edited (see "blog gate")
  */
 
 // Drive folder the database lives in ("Kleros Booth Check-in · Devcon 2026" in the work Drive).
@@ -447,6 +448,8 @@ function fitColumns_(m) {
 
 function doPost(e) {
   return respond_(function () {
+    var p = e.parameter || {};
+    if (p.hook === 'ghost') return ghostHook_(e, p);
     var d = body_(e);
     // Polled every few seconds by visitors confirming their email; it only reads (plus one cell), so no write lock.
     if (d.action === 'verify') return verify_(d);
@@ -554,14 +557,12 @@ function get_(p) {
     var giving = p.value !== 'false';
     require_(!giving || sh.getRange(row, col_('Claim')).getValue() !== 'Already claimed',
       'Already claimed: this email or Telegram account got merch on another check-in.');
-    // Merch only once the visitor has confirmed their blog subscription. Checked live with Ghost, so it never
+    // Merch only once the visitor has confirmed their blog subscription, as Ghost reported it, so it never
     // depends on what the visitor's page shows.
     if (giving && sh.getRange(row, col_('Newsletter')).getValue() !== 'Confirmed') {
-      var c;
-      try { c = blogConfirmed_(sh.getRange(row, col_('Email')).getValue()); } catch (err) { /* reported just below */ }
-      require_(c !== undefined, 'Could not reach the Kleros blog to check the subscription. Try again in a moment.');
-      require_(c !== null, 'The blog check is not set up yet (GHOST_ADMIN_KEY missing in Script properties).');
-      require_(c, 'Email not confirmed yet. Ask them to tap "Confirm signup" in the Kleros blog email, then try again.');
+      require_(ghostSecret_(), 'The blog check is not set up yet (run ghostWebhookSetup and add the webhooks in Ghost).');
+      require_(blogConfirmed_(sh.getRange(row, col_('Email')).getValue()),
+        'Email not confirmed yet. Ask them to tap the link in the Kleros blog email, then try again.');
       sh.getRange(row, col_('Newsletter')).setValue('Confirmed');
     }
     sh.getRange(row, col_('Merch given')).setValue(giving);
@@ -599,42 +600,43 @@ function rematchAll() {
 /* ------------------------------------------------------------ blog gate */
 
 // The final check-in screen (and merch) only comes once the visitor has confirmed their Kleros blog
-// subscription. Ghost creates the member only after they tap "Confirm signup", so "member exists" = confirmed.
-// Needs a Ghost Admin API key in Script properties: GHOST_ADMIN_KEY ("id:secret") and GHOST_ADMIN_URL (the
-// "API URL" shown next to the key). Strict on purpose: without a working key nobody gets through.
-function ghostConfig_() {
-  var p = PropertiesService.getScriptProperties();
-  var key = String(p.getProperty('GHOST_ADMIN_KEY') || '').trim();
-  if (!/^[0-9a-f]+:[0-9a-f]+$/i.test(key)) return null;
-  return { id: key.split(':')[0], secret: key.split(':')[1],
-           url: String(p.getProperty('GHOST_ADMIN_URL') || 'https://blog.kleros.io').trim().replace(/\/+$/, '') };
+// subscription. Ghost tells us through webhooks on a "Devcon booth" custom integration, so we hold no Ghost key
+// and never call Ghost:
+//   member.added   Ghost creates the member only after they tap "Confirm signup", so this is the confirmation.
+//   member.edited  an existing subscriber gets a sign-in email instead; opening the blog from it updates their
+//                  "last seen" (once a day), which Ghost reports as an edit.
+// Apps Script can't read Ghost's signature header, so the webhook URL carries a secret: GHOST_WEBHOOK_SECRET,
+// made by ghostWebhookSetup. Strict on purpose: until it exists nobody gets through.
+function ghostSecret_() {
+  return String(PropertiesService.getScriptProperties().getProperty('GHOST_WEBHOOK_SECRET') || '').trim();
 }
 
-// Short-lived Admin API token (Ghost's documented JWT: HS256, kid = key id, aud = /admin/).
-function ghostToken_(cfg) {
-  var b64 = function (x) { return Utilities.base64EncodeWebSafe(x).replace(/=+$/, ''); };
-  var now = Math.floor(Date.now() / 1000);
-  var unsigned = b64(JSON.stringify({ alg: 'HS256', typ: 'JWT', kid: cfg.id })) + '.' +
-                 b64(JSON.stringify({ iat: now, exp: now + 300, aud: '/admin/' }));
-  var key = cfg.secret.match(/../g).map(function (h) { var n = parseInt(h, 16); return n > 127 ? n - 256 : n; });
-  return unsigned + '.' + b64(Utilities.computeHmacSha256Signature(Utilities.newBlob(unsigned).getBytes(), key));
+// The live web app URL (endpoint in site/config.js). Apps Script can't tell a script its own deployment URL.
+var WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzxw7RFUWHJGAD78-9hdmmE4KmNctwLPnpZfD134d_fuoSEQ6MRgKDy7GgWuR9A8D-vzg/exec';
+
+// Ghost webhook (POST ?hook=ghost&secret=S). Only check-ins are written down (Newsletter = Confirmed). Any
+// other member's email only sits in the script cache for 6 hours, in case their check-in is still queued on
+// their phone, and is never stored. No lock: it reads one column and writes single cells.
+function ghostHook_(e, p) {
+  var secret = ghostSecret_();
+  require_(secret && p.secret === secret, 'unauthorised');
+  var d = body_(e);
+  var email = String(((d.member || {}).current || {}).email || '').trim().toLowerCase();
+  if (d.event === 'member.deleted' || !email) return json_({ ok: true });
+  CacheService.getScriptCache().put('ghost:' + email, '1', 21600);
+  var sh = sheet_(LEADS), last = lastRow_(sh);
+  if (last < 3) return json_({ ok: true });
+  var emails = sh.getRange(3, col_('Email'), last - 2, 1).getValues(), news = sh.getRange(3, col_('Newsletter'), last - 2, 1).getValues();
+  emails.forEach(function (r, i) {
+    if (String(r[0]).trim().toLowerCase() === email && news[i][0] !== 'Confirmed') sh.getRange(i + 3, col_('Newsletter')).setValue('Confirmed');
+  });
+  return json_({ ok: true });
 }
 
-// true / false, or null when no key is set up. Throws if Ghost can't be reached.
+// Has Ghost reported this email in the last 6 hours? (Rows it matched are already marked Confirmed.)
 function blogConfirmed_(email) {
-  var cfg = ghostConfig_();
-  if (!cfg) return null;
   email = String(email || '').trim().toLowerCase();
-  if (!email) return false;
-  var cache = CacheService.getScriptCache(), ck = 'ghost:' + email;
-  var hit = cache.get(ck);
-  if (hit) return hit === '1';
-  var res = UrlFetchApp.fetch(cfg.url + '/ghost/api/admin/members/?limit=1&filter=' + encodeURIComponent("email:'" + email.replace(/'/g, "\\'") + "'"),
-    { headers: { Authorization: 'Ghost ' + ghostToken_(cfg), 'Accept-Version': 'v5.0' }, muteHttpExceptions: true });
-  if (res.getResponseCode() !== 200) throw new Error('Ghost ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 200));
-  var ok = (JSON.parse(res.getContentText()).members || []).length > 0;
-  cache.put(ck, ok ? '1' : '0', ok ? 21600 : 4);   // confirmed stays confirmed; "not yet" re-checked within seconds
-  return ok;
+  return !!email && CacheService.getScriptCache().get('ghost:' + email) === '1';
 }
 
 /**
@@ -644,7 +646,7 @@ function blogConfirmed_(email) {
  * ({ x, linkedin, quiz, wrong }); `tg` says the page is waiting for the Telegram bot.
  */
 function verify_(d) {
-  if (!ghostConfig_()) return json_({ ok: true, confirmed: false, setup: false });   // no key yet: nobody passes
+  if (!ghostSecret_()) return json_({ ok: true, confirmed: false, setup: false });   // no webhook yet: nobody passes
   var sh = sheet_(LEADS);
   var row = d.id ? findRow_(sh, 'Client ID', d.id) : -1;
   if (row < 0) return json_({ ok: true, confirmed: false, pending: true });   // check-in not saved yet
@@ -839,13 +841,15 @@ function telegramStop() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'telegramTick') ScriptApp.deleteTrigger(t); });
 }
 
-/** Run from the editor after adding the key: says whether the gate is on and Ghost answers. */
-function ghostStatus() {
-  var cfg = ghostConfig_();
-  if (!cfg) { Logger.log('NOT SET UP: no valid GHOST_ADMIN_KEY in Script properties, so no visitor can finish checking in. Add the key.'); return; }
-  var res = UrlFetchApp.fetch(cfg.url + '/ghost/api/admin/members/?limit=1',
-    { headers: { Authorization: 'Ghost ' + ghostToken_(cfg), 'Accept-Version': 'v5.0' }, muteHttpExceptions: true });
-  Logger.log('Ghost at ' + cfg.url + ' answered ' + res.getResponseCode() + (res.getResponseCode() === 200 ? ' (key works)' : ': ' + res.getContentText().slice(0, 200)));
+/**
+ * Run once: makes the webhook secret (kept if it exists) and logs the target URL for the Ghost admin's two
+ * webhooks, member.added and member.edited. The URL holds the secret, so send it privately, never in a channel.
+ * Turns the blog gate on: from now on visitors pass once Ghost reports them.
+ */
+function ghostWebhookSetup() {
+  var p = PropertiesService.getScriptProperties();
+  if (!ghostSecret_()) p.setProperty('GHOST_WEBHOOK_SECRET', Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, ''));
+  Logger.log('Ghost webhook target URL (member.added and member.edited): ' + WEB_APP_URL + '?hook=ghost&secret=' + ghostSecret_());
 }
 
 /* ------------------------------------------------------------- examples */
