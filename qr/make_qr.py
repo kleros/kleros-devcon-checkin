@@ -6,6 +6,8 @@ icosahedron, Urbanist + Space Mono, and a crisp violet-to-blue QR with the Klero
     python3 qr/make_qr.py https://other.url    # any other address
 
 Writes into qr/:
+  devcon-kleros-qr-display.png  2480x3508 booth display (A4 at 300 dpi; scales to A3/A2): "Check in & grab
+                                limited-edition merch", the merch tiers with photos, the QR. Also as .pdf
   devcon-kleros-qr-poster.png   1800x2400 portrait card (6x8 in at 300 dpi) for a table stand
   devcon-kleros-qr-square.png   1500x1500 sticker / social square
   devcon-kleros-qr-plain.png    QR only on white, for designers to drop into other artwork
@@ -31,6 +33,7 @@ FONTS = os.path.join(HERE, "fonts")
 NIGHT, NIGHT_2, DUSK = (15, 10, 46), (29, 16, 80), (52, 24, 112)
 KLEROS, KLEROS_DEEP = (144, 19, 254), (77, 0, 180)
 GOLD, LILAC, MUTED, WHITE = (242, 196, 109), (199, 182, 255), (184, 172, 220), (255, 255, 255)
+TEAL, PURPLE = (127, 240, 224), (183, 123, 255)
 # QR ink: violet into the blue edge of the icosahedron (both well over 6:1 on white)
 INK_A, INK_B = (77, 0, 180), (40, 72, 206)
 # Finder-eye corner radii in modules (outer, hole, centre). Rounder eyes look softer but some
@@ -276,6 +279,58 @@ def square():
     return img.convert("RGB")
 
 
+# Merch tiers on the booth display, matching site/config.js. Photos (600px crops of the supplier
+# mock-ups) are in qr/assets/merch.
+TIERS = [("Teal", TEAL, ["flipflops"], "Flip-flops", "Check in"),
+         ("Purple", PURPLE, ["bottle", "gamcha"], "Copper bottle or gamcha", "+ Telegram, X, LinkedIn"),
+         ("Gold", GOLD, ["kurta"], "Kleros kurta", "+ Kleros 101 quiz")]
+
+
+def photo_tile(img, x, y, size, name, ring):
+    """Rounded merch photo with a coloured ring, like the thumbnails on the site."""
+    p = Image.open(os.path.join(HERE, "assets", "merch", name + ".jpg")).convert("RGBA").resize((size, size), Image.LANCZOS)
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, size - 1, size - 1), radius=int(size * 0.28), fill=255)
+    p.putalpha(mask)
+    rw = max(4, size // 28)
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(layer).rounded_rectangle((x - rw, y - rw, x + size + rw, y + size + rw), radius=int(size * 0.28) + rw, fill=ring + (255,))
+    img.alpha_composite(layer)
+    img.alpha_composite(p, (int(x), int(y)))
+
+
+def display():
+    W, H = 2480, 3508
+    img = background(W, H)
+    y = gem(img, W / 2, 130, 260)
+    gradient_headline(img, y + 40, "Check in & grab", urbanist(200))
+    centered(img, y + 290, "limited-edition merch", urbanist(150), GOLD)
+    centered(img, y + 500, "More steps, better merch", urbanist(64, "SemiBold"), MUTED)
+
+    # Three tier columns: photos, tier name, reward, what it takes.
+    top, col, tile = y + 640, W // 3, 300
+    for i, (name, colour, photos, reward, how) in enumerate(TIERS):
+        cx = col * i + col / 2
+        n = len(photos)
+        step = int(tile * 0.72)
+        x0 = cx - (tile + step * (n - 1)) / 2
+        for k, ph in enumerate(photos):
+            photo_tile(img, x0 + k * step, top, tile, ph, colour)
+        ty = top + tile + 50
+        draw_text(img, (cx - text_width(name.upper(), urbanist(54, "Bold"), 8) / 2, ty), name.upper(), urbanist(54, "Bold"), colour, tracking=8)
+        f = urbanist(52, "Bold")
+        draw_text(img, (cx - text_width(reward, f) / 2, ty + 80), reward, f, WHITE)
+        draw_text(img, (cx - text_width(how, urbanist(44, "Medium")) / 2, ty + 155), how, urbanist(44, "Medium"), MUTED)
+
+    y = perk_pill(img, top + tile + 340, "Free stickers & tattoos for everyone", urbanist(54, "SemiBold"))
+    card, qr = 1320, 1060
+    qr_card(img, (W - card) // 2, y + 90, card, qr)
+    y += 90 + card
+    centered(img, y + 70, DOMAIN, mono(96), WHITE, tracking=5)
+    centered(img, y + 205, CAPTION, urbanist(56, "Medium"), MUTED)
+    return img.convert("RGB")
+
+
 def plain():
     img = Image.new("RGBA", (2000, 2000), WHITE + (255,))
     img.alpha_composite(qr_image(1700), (150, 150))   # 150px white margin as quiet zone
@@ -359,9 +414,12 @@ def self_check(paths):
 
 if __name__ == "__main__":
     out = []
-    for name, fn in (("poster", poster), ("square", square), ("plain", plain)):
+    for name, fn in (("display", display), ("poster", poster), ("square", square), ("plain", plain)):
         p = os.path.join(HERE, f"devcon-kleros-qr-{name}.png")
-        fn().save(p, dpi=(300, 300))
+        im = fn()
+        im.save(p, dpi=(300, 300))
+        if name == "display":
+            im.save(p[:-4] + ".pdf", resolution=300)   # A4 print file
         out.append(p)
     print("encoded:", URL)
     self_check(out)
