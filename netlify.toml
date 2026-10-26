@@ -2,3 +2,9 @@
 # site/_headers keeps config.js and matching.js uncached and the dashboard out of search engines.
 [build]
   publish = "site"
+
+# The team dashboard at /admin as well as /admin.html.
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200

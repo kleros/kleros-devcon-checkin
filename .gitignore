@@ -4,3 +4,4 @@ public/
 *.zip
 *.xlsx
 __pycache__/
+dist/

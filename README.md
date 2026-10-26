@@ -8,6 +8,8 @@ Visitors scan the booth QR, check in on their phone, confirm their Kleros blog s
 
 ## Start here (devs)
 
+Short version: [`docs/DEPLOY.md`](docs/DEPLOY.md). `bash scripts/package.sh` builds `dist/kleros-devcon-deploy.zip` (site folder for Netlify, the backend as one file, the deploy guide) for handing over without the repo.
+
 1. **Deploy the site** on Kleros's Netlify, like ai.kleros.io. `netlify.toml` publishes `site/` as is; connect this repo, or drag `site/` into *Deploy manually*.
 2. **Domain:** add `devcon.kleros.io` to the Netlify site, and a CNAME `devcon` → `<site-name>.netlify.app` in Cloudflare (kleros.io's DNS lives there).
 3. **Blog gate key:** a Ghost Administrator creates *Settings › Integrations › Add custom integration* and adds its Admin API key to the Apps Script project (see [Blog confirmation gate](#blog-confirmation-gate)). **Until then nobody can finish checking in.**
@@ -28,6 +30,8 @@ Visitors scan the booth QR, check in on their phone, confirm their Kleros blog s
 | `apps-script/Code.gs` | Backend: check-ins, Sheet tabs and views, research-agent API, blog gate, merch tiers, Telegram bot |
 | `apps-script/Matching.gs` | Copy of `site/matching.js` for the backend (kept in sync by the bundle script) |
 | `scripts/apps-script-bundle.sh` | Prints the backend as the single file that lives in the Apps Script editor |
+| `scripts/package.sh` | Builds `dist/kleros-devcon-deploy.zip`: Netlify-ready site, backend file, deploy guide |
+| `docs/DEPLOY.md` | Step-by-step deploy: Netlify, domain, backend, keys |
 | `qr/` | Booth QR generator (`make_qr.py`) and the print-ready codes |
 | `docs/COMPLIANCE.md` | Review against the EF Devcon Booth Guidelines and Supporter Agreement |
 | `docs/RESEARCH_AGENT.md` | Playbook for the agents that research leads |
@@ -151,7 +155,7 @@ Everything works end to end (preview + live backend, last tested 26 Oct 2026; me
 
 ## Booth QR codes
 
-`python3 qr/make_qr.py` regenerates the booth display (`devcon-kleros-qr-display.png`/`.pdf`, A4 at 300 dpi, scales to A3/A2: "Check in & grab limited-edition merch" with the merch tiers and photos), the table card (6×8 in), square sticker and plain PNG/SVG for https://devcon.kleros.io, and checks each one scans (OpenCV and ZXing; needs `qrcode[pil]`, `opencv-python-headless`, `zxing-cpp`). Keep the finder-eye corners small (`EYE_R`) so every scanner finds the code.
+`python3 qr/make_qr.py` regenerates the table card (6×8 in), square sticker and plain PNG/SVG for https://devcon.kleros.io, and checks each one scans (OpenCV and ZXing; needs `qrcode[pil]`, `opencv-python-headless`, `zxing-cpp`). Keep the finder-eye corners small (`EYE_R`) so every scanner finds the code.
 
 ## Privacy and compliance
 
