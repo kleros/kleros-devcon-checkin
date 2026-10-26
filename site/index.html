@@ -599,7 +599,7 @@
       <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="m22 7-10 6L2 7"/></svg></div>
       <div class="kicker">One last step</div>
       <h2>Confirm your email</h2>
-      <p>We've sent an email from the Kleros blog to <b id="c-email"></b>. Open it and tap <b>Confirm signup</b>, then come back here.</p>
+      <p>We've sent an email from the Kleros blog to <b id="c-email"></b>. Open it and tap <b>Confirm signup</b> (or <b>Sign in</b> if you already subscribe), then come back here.</p>
       <div class="wait"><i aria-hidden="true"></i><span id="c-status">Waiting for your confirmation…</span></div>
       <p class="unlock" id="c-unlock" hidden></p>
       <p class="fine">Your merch screen appears here as soon as you've confirmed. Can't see the email? Check Promotions or Spam.</p>
@@ -1377,8 +1377,8 @@
   if (!KIOSK) $('again').hidden = true;
 
   // Confirmation gate: the final screen only appears once the visitor has done every required step and
-  // confirmed their Kleros blog subscription (Ghost's own "Confirm signup" email). The backend checks with
-  // Ghost and answers { confirmed }. Strict: with no Ghost key set up ({ setup: false }) nobody gets through.
+  // confirmed their Kleros blog subscription (the link in Ghost's own email). Ghost reports it to the backend
+  // by webhook, and the backend answers { confirmed }. Strict: with no webhook set up ({ setup: false }) nobody gets through.
   var pending = null, pollTimer = null, lastResend = 0;
   function verifyNow() {
     var rec = pending;
