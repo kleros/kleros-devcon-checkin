@@ -1,6 +1,6 @@
 """
-Kleros booth QR codes, drawn in the check-in site's look: night background, the kleros.io
-icosahedron, Urbanist + Space Mono, and a crisp violet-to-blue QR with the Kleros mark inside.
+Kleros booth QR codes, drawn in the check-in site's look: night background, the Kleros logo
+mark, Urbanist + Space Mono, and a crisp violet-to-blue QR with the Kleros mark inside.
 
     python3 qr/make_qr.py                      # https://devcon.kleros.io
     python3 qr/make_qr.py https://other.url    # any other address
@@ -238,23 +238,24 @@ def qr_card(img, x0, y0, card, qr):
     img.alpha_composite(qr_image(qr), (x0 + (card - qr) // 2, y0 + (card - qr) // 2))
 
 
-def gem(img, cx, y, width):
-    """The kleros.io icosahedron with a soft halo."""
-    g = Image.open(os.path.join(HERE, "assets", "kleros-icosahedron.png")).convert("RGBA")
-    h = int(g.height * width / g.width)
-    g = g.resize((width, h), Image.LANCZOS)
+def logo(img, cx, y, width):
+    """The Kleros logo mark (flat white icosahedron) with a soft violet halo."""
+    m = symbol_png(width * 2)
+    m = m.crop(m.getchannel("A").getbbox())
+    h = int(m.height * width / m.width)
+    m = m.resize((width, h), Image.LANCZOS)
     halo = Image.new("RGBA", img.size, (0, 0, 0, 0))
     r = width * 0.62
     ImageDraw.Draw(halo).ellipse((cx - r, y + h / 2 - r, cx + r, y + h / 2 + r), fill=(150, 120, 255, 70))
     img.alpha_composite(halo.filter(ImageFilter.GaussianBlur(width // 4)))
-    img.alpha_composite(g, (int(cx - width / 2), int(y)))
+    img.alpha_composite(m, (int(cx - width / 2), int(y)))
     return y + h
 
 
 def poster():
     W, H = 1800, 2400
     img = background(W, H)
-    y = gem(img, W / 2, 150, 300)
+    y = logo(img, W / 2, 160, 290)
     gradient_headline(img, y + 60, HEADLINE, urbanist(148))
     y = perk_pill(img, y + 290, PERK, urbanist(50, "SemiBold"))
     card, qr = 1180, 940
