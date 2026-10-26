@@ -199,7 +199,8 @@
       priority: r['Priority'], product: r['Suggested product'], owner: r['Owner'], nextStep: r['Next step'],
       reasons: r['Match reasons'], merch: r['Merch given'] === true || r['Merch given'] === 'TRUE',
       returning: r['Returning visitor'], notes: r['Team notes'], status: r['Status'],
-      researchStatus: r['Research status'], flags: r['Flags'], flagType: r['Flag type'], relevance: r['Relevance to Kleros']
+      researchStatus: r['Research status'], flags: r['Flags'], flagType: r['Flag type'], relevance: r['Relevance to Kleros'],
+      tier: r['Tier'], claim: r['Claim']
     };
   }
 
@@ -378,7 +379,8 @@
     var hits = leads.filter(function (l) { return String(l.ticket).toUpperCase().indexOf(code) === 0 || String(l.name).toUpperCase().indexOf(raw) >= 0; }).slice(0, 5);
     el.innerHTML = hits.length ? hits.map(function (l) {
       // Merch needs a confirmed Kleros blog subscription; "Give merch" re-checks it live, so a stale "not yet" still works.
-      var conf = l.newsletter === 'Confirmed' ? '<span class="conf ok">Email confirmed ✓</span>' : '<span class="conf">Email not confirmed yet</span>';
+      var conf = l.claim === 'Already claimed' ? '<span class="conf">Already claimed on another check-in</span>'
+        : l.newsletter === 'Confirmed' ? '<span class="conf ok">Email confirmed ✓' + (l.tier ? ' · ' + esc(l.tier) + ' tier' : '') + '</span>' : '<span class="conf">Email not confirmed yet</span>';
       return '<div class="hit"><div class="who"><b>' + esc(l.name) + '</b><small>' + esc(l.ticket) + ' · ' + esc(l.company) + '</small>' + conf + '</div>' +
         (l.merch ? '<span class="given">Given ✓</span> <button data-undo="' + esc(l.id) + '">Undo</button>' : '<button class="pri" data-give="' + esc(l.id) + '">Give merch</button>') + '</div>';
     }).join('') : '<div class="note">No match. Ask them to show their check-in screen, or check them in now.</div>';
@@ -403,7 +405,7 @@
 
   function csv() {
     var cols = ['ts', 'ticket', 'name', 'company', 'position', 'seniority', 'level', 'email', 'telegram', 'linkedin', 'x', 'interests', 'otherInterest', 'klerosUse', 'building', 'wantsCall', 'newsletter',
-      'pipeline', 'primary', 'secondary', 'fitScore', 'priority', 'researchStatus', 'flagType', 'flags', 'product', 'owner', 'nextStep', 'reasons', 'merch', 'status', 'notes'];
+      'pipeline', 'primary', 'secondary', 'fitScore', 'priority', 'researchStatus', 'flagType', 'flags', 'product', 'owner', 'nextStep', 'reasons', 'merch', 'tier', 'claim', 'status', 'notes'];
     var lines = [cols.join(',')].concat(filtered().map(function (l) {
       return cols.map(function (c) {
         var v = l[c] == null ? '' : String(l[c]);

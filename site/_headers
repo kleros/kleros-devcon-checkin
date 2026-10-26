@@ -2,6 +2,8 @@
   Cache-Control: no-cache
 /matching.js
   Cache-Control: no-cache
+/quiz.js
+  Cache-Control: no-cache
 /admin
   X-Robots-Tag: noindex
 /admin.html

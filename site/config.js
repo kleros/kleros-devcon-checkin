@@ -15,6 +15,21 @@ window.KLEROS_BOOTH_CONFIG = {
   // `label` tags the new subscribers in Ghost; create a label with this exact name in Ghost admin for it to stick.
   blog: { url: 'https://blog.kleros.io', label: 'Devcon VIII booth' },
 
+  // Merch tiers, shown above the form (so visitors know more steps mean better merch) and on the final screen.
+  // Teal: check in and confirm the blog email. Purple: also join the Kleros Telegram (checked by @KlerosDevconBot)
+  // and follow Kleros on X and LinkedIn. Gold: also get all 3 Kleros 101 questions right (quiz.js).
+  // Change the rewards and pictures freely; keep three tiers.
+  merch: {
+    tiers: [
+      { name: 'Teal', reward: 'Metallic tattoo', img: 'assets/merch/tattoo.jpg' },
+      { name: 'Purple', reward: 'Proof of Humanity charm', img: 'assets/merch/charm.jpg' },
+      { name: 'Gold', reward: 'Kleros kurta', img: 'assets/merch/kurta.jpg' }
+    ],
+    note: 'One per person, while stocks last'
+  },
+  telegram: { bot: 'KlerosDevconBot', group: 'https://t.me/kleros' },
+  follow: { x: 'https://x.com/kleros_io', linkedin: 'https://www.linkedin.com/company/kleros/' },
+
   // Community Hubs card on the ticket screen. Set `show: false` to hide it.
   // Copy is kept neutral on purpose: the hubs are community spaces, not Kleros-run,
   // and each has a no-promotion policy. Describe the topics, not who organises them.
