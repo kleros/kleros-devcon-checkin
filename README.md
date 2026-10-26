@@ -14,7 +14,6 @@ Short version: [`docs/DEPLOY.md`](docs/DEPLOY.md). `bash scripts/package.sh` bui
 2. **Domain:** add `devcon.kleros.io` to the Netlify site, and a CNAME `devcon` → `<site-name>.netlify.app` in Cloudflare (kleros.io's DNS lives there).
 3. **Blog gate key:** a Ghost Administrator creates *Settings › Integrations › Add custom integration* and adds its Admin API key to the Apps Script project (see [Blog confirmation gate](#blog-confirmation-gate)). **Until then nobody can finish checking in.**
 4. **Telegram bot:** add the @KlerosDevconBot token and run `telegramSetup` (see [Merch tiers and the Telegram bot](#merch-tiers-and-the-telegram-bot)). **Until then nobody can reach Purple or Gold.**
-5. Review the points under [For review](#for-review).
 
 ## Repo layout
 
@@ -33,7 +32,6 @@ Short version: [`docs/DEPLOY.md`](docs/DEPLOY.md). `bash scripts/package.sh` bui
 | `scripts/package.sh` | Builds `dist/kleros-devcon-deploy.zip`: Netlify-ready site, backend file, deploy guide |
 | `docs/DEPLOY.md` | Step-by-step deploy: Netlify, domain, backend, keys |
 | `qr/` | Booth QR generator (`make_qr.py`) and the print-ready codes |
-| `docs/COMPLIANCE.md` | Review against the EF Devcon Booth Guidelines and Supporter Agreement |
 | `docs/RESEARCH_AGENT.md` | Playbook for the agents that research leads |
 | `docs/telegram-bot-avatar.png` | @KlerosDevconBot's profile picture (the gold Kleros Juror seal from the tattoo sheet) |
 
@@ -107,7 +105,7 @@ Setup, once:
 
 1. **Token.** In Telegram, @BotFather › `/mybots` › KlerosDevconBot › *API Token*. Apps Script › Project settings › Script properties: `TELEGRAM_BOT_TOKEN` = the token. Never paste it anywhere else.
 2. **Group.** The bot is already in t.me/kleros as a member (added 26 Oct 2026). Telegram only guarantees member lookups to admins.
-3. Run `telegramSetup` in the editor: it checks the token, tests a member lookup, and installs the every-minute trigger. If it logs "Member lookups: NOT working", a group admin who can add admins (jean, Clément or Federico) makes @KlerosDevconBot an administrator with no permissions. As an admin the bot also receives the group's messages; the backend skips them and stores nothing. After Devcon, run `telegramStop`.
+3. Run `telegramSetup` in the editor: it checks the token, tests a member lookup, and installs the every-minute trigger. If it logs "Member lookups: NOT working", a group admin who can add admins makes @KlerosDevconBot an administrator with no permissions. As an admin the bot also receives the group's messages; the backend skips them and stores nothing. After Devcon, run `telegramStop`.
 
 Bot profile (name, description, picture `docs/telegram-bot-avatar.png`) is set in @BotFather.
 
@@ -133,19 +131,6 @@ After changing it: redeploy the site and the backend, then Sheet menu *Kleros �
 | `site/` | On the next Netlify deploy (a push, once the repo is connected) |
 | `apps-script/` | Only after pasting the bundle and deploying a new version |
 
-## For review
-
-Everything works end to end (preview + live backend, last tested 26 Oct 2026; merch tiers tested against a local mock of the backend, Ghost and Telegram, since the Ghost key and bot token aren't in yet). Judgement calls for a dev:
-
-1. **Hosting.** Kleros Netlify team + Cloudflare CNAME (above). Delete the pages.dev preview afterwards.
-2. **Open endpoint.** Anyone who reads `config.js` can post check-ins: no rate limit or CAPTCHA (normal for a booth form). Fake emails can't reach the final screen, but they can add Sheet rows.
-3. **Dashboard key in URLs.** `admin.html` sends `?key=` to Apps Script; it shows up in the team phones' history. Rotate after Devcon (delete `ADMIN_KEY`, run `setup`).
-4. **Personal data.** Up to ~10,000 contacts in a Sheet shared with its parent folder. Check folder access, and swap the privacy contact in `config.js` for a shared inbox.
-5. **Ghost key.** A full Admin API key, kept only in Script properties. A dedicated integration, revoked after Devcon, is cleanest.
-6. **Apps Script quotas.** Polling while visitors confirm costs a few calls each; fine for Workspace limits, worth watching at peak. The Telegram trigger adds one run a minute (stop it after Devcon).
-7. **Unverified steps.** X and LinkedIn follows and the quiz are trusted from the phone; only Telegram is checked. Someone editing the page in dev tools could fake a colour, but not the ticking clock on a screenshot. Accepted for booth merch.
-8. **Telegram token.** Full control of the bot, kept only in Script properties; bot API errors are returned without the URL so it never leaks into a response. Revoke it in @BotFather after Devcon if the bot isn't reused.
-
 ## New Devcon year
 
 1. `site/config.js`: `edition`, `city`, `event`, Community Hubs.
@@ -157,6 +142,6 @@ Everything works end to end (preview + live backend, last tested 26 Oct 2026; me
 
 `python3 qr/make_qr.py` regenerates the booth poster (6×8 in, plus an A4 PNG and print-ready PDF), square sticker and plain PNG/SVG for https://devcon.kleros.io, and checks each one scans (OpenCV and ZXing; needs `qrcode[pil]`, `opencv-python-headless`, `zxing-cpp`). Keep the finder-eye corners small (`EYE_R`) so every scanner finds the code.
 
-## Privacy and compliance
+## Privacy
 
-The page carries its own privacy notice (controller: Cooperative Kleros; purposes include public-profile research; deletion on request). The blog box is never pre-ticked. See `docs/COMPLIANCE.md` for the full review, including open points.
+The page carries its own privacy notice (controller: Cooperative Kleros; purposes include public-profile research; deletion on request). The blog box is never pre-ticked.
