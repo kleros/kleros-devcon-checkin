@@ -12,7 +12,7 @@ Short version: [`docs/DEPLOY.md`](docs/DEPLOY.md). `bash scripts/package.sh` bui
 
 1. **Deploy the site** on Kleros's Netlify, like ai.kleros.io. `netlify.toml` publishes `site/` as is; connect this repo, or drag `site/` into *Deploy manually*.
 2. **Domain:** add `devcon.kleros.io` to the Netlify site, and a CNAME `devcon` → `<site-name>.netlify.app` in Cloudflare (kleros.io's DNS lives there).
-3. **Blog gate key:** a Ghost Administrator creates *Settings › Integrations › Add custom integration* and adds its Admin API key to the Apps Script project (see [Blog confirmation gate](#blog-confirmation-gate)). **Until then nobody can finish checking in.**
+3. **Blog gate webhooks:** run `ghostWebhookSetup`, then a Ghost admin adds two webhooks pointing at the URL it logs (see [Blog confirmation gate](#blog-confirmation-gate)). No Ghost API key is needed. **Until then nobody can finish checking in.**
 4. **Telegram bot:** add the @KlerosDevconBot token and run `telegramSetup` (see [Merch tiers and the Telegram bot](#merch-tiers-and-the-telegram-bot)). **Until then nobody can reach Purple or Gold.**
 
 ## Repo layout
@@ -64,7 +64,7 @@ Live project: **Kleros Devcon 2026 · Booth Leads Backend** (standalone, owned b
 
 Guards use `require_(condition, error)`; `respond_` turns a failed one into `{ ok: false, error }`.
 
-**Script properties:** `ADMIN_KEY` (dashboard/agent key; Sheet menu *Kleros › Show dashboard / agent key*), `SHEET_ID`, `GHOST_ADMIN_KEY`, `GHOST_ADMIN_URL`, `TELEGRAM_BOT_TOKEN`, optional `TELEGRAM_GROUP` (default `@kleros`) and `SITE_URL` (default `https://devcon.kleros.io`). `TELEGRAM_OFFSET` is managed by the code.
+**Script properties:** `ADMIN_KEY` (dashboard/agent key; Sheet menu *Kleros › Show dashboard / agent key*), `SHEET_ID`, `GHOST_WEBHOOK_SECRET` (made by `ghostWebhookSetup`), `TELEGRAM_BOT_TOKEN`, optional `TELEGRAM_GROUP` (default `@kleros`) and `SITE_URL` (default `https://devcon.kleros.io`). `TELEGRAM_OFFSET` is managed by the code.
 
 **Changing the backend:** edit `apps-script/Code.gs` (and `site/matching.js` for matching), then
 
@@ -72,26 +72,30 @@ Guards use `require_(condition, error)`; `respond_` turns a failed one into `{ o
 bash scripts/apps-script-bundle.sh | pbcopy
 ```
 
-paste over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › Version: New version › Deploy* (same URL). Menu actions use the saved code straight away; the web app only changes on a new version. Current live version: **10** (merch tiers; the live Sheet already has its columns, added with `addMerchTierColumns`).
+paste over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › Version: New version › Deploy* (same URL). Menu actions use the saved code straight away; the web app only changes on a new version. Current live version: **12** (blog gate via Ghost webhooks; merch tier columns already added with `addMerchTierColumns`).
 
 **From scratch:** create a standalone project at script.google.com while signed in as the Kleros account, paste the bundle, set `FOLDER_ID` in `Code.gs`, run `setup` (it creates and names the Sheet in that folder), approve permissions, deploy as a web app as above, and put the `/exec` URL in `site/config.js`.
 
 ### Blog confirmation gate
 
-Ghost creates a member only after they confirm, so "member exists" means "confirmed". The backend asks the Ghost Admin API, which needs a key:
+The page signs visitors up through Ghost's public members API, and Ghost emails them a link. Ghost creates a member only after they tap it, so "Ghost added this member" means "confirmed". Ghost tells the backend through webhooks; the backend holds no Ghost key and never calls Ghost.
 
-1. Ghost admin (kleros.ghost.io/ghost, Administrator role) › Settings › Integrations › **Add custom integration** ("Devcon booth"). Copy the **Admin API key** and **API URL**.
-2. Apps Script › Project settings › Script properties: `GHOST_ADMIN_KEY` = the key, `GHOST_ADMIN_URL` = the API URL.
-3. Run `ghostStatus` in the editor: it should log Ghost answering 200. Then do one real check-in.
+1. Apps Script editor: run `ghostWebhookSetup`. It saves `GHOST_WEBHOOK_SECRET` and logs the target URL (the web app URL plus `?hook=ghost&secret=…`). Send that URL to the Ghost admin privately: it contains the secret.
+2. Ghost admin › Settings › Integrations › **Add custom integration** ("Devcon booth") › **Add webhook**, twice, both with that target URL:
+   - `Member added`: a new subscriber tapped *Confirm signup*.
+   - `Member edited`: an existing subscriber gets a sign-in email instead; opening the blog from it updates their "last seen", which Ghost reports as an edit (at most once a day per member).
+3. Check in on a phone with a fresh email, tap the link in the blog email, and the final screen appears within seconds.
 
-Strict on purpose: with no key, or Ghost unreachable, visitors wait on "Confirm your email" (and see "Confirmation check is offline. Please ask the Kleros team." when no key is set). Nobody is waved through.
+Why a secret in the URL: Apps Script can't read Ghost's `X-Ghost-Signature` header. The backend keeps an email only when it matches a check-in (as *Newsletter = Confirmed*); any other member's email sits in the script cache for 6 hours and is never stored. Ghost may show the deliveries as failed, because Apps Script answers POSTs with a redirect; the backend still gets them (Apps Script › Executions shows each `doPost`).
+
+Strict on purpose: until `ghostWebhookSetup` has run, visitors wait on "Confirm your email" and see "Confirmation check is offline. Please ask the Kleros team." Nobody is waved through. An existing subscriber who already opened the blog that day gets no new event; set their row's *Newsletter* to `Confirmed` in the Sheet to let them through.
 
 ### Merch tiers and the Telegram bot
 
 | Tier | Needs | Checked how | Merch (stock) |
 |---|---|---|---|
 | Everyone | nothing | | Stickers, metallic tattoos (50 A5 sheets) |
-| Teal | Check-in + confirmed blog email | Ghost (above) | Flip-flops (200) |
+| Teal | Check-in + confirmed blog email | Ghost webhooks (above) | Flip-flops (200) |
 | Purple | + joined the Kleros Telegram group, tapped Follow on X and on LinkedIn | Telegram: @KlerosDevconBot. X and LinkedIn: counted on tap (checking needs paid APIs) | Copper bottle (100) or gamcha (100) |
 | Gold | + all three Kleros 101 questions right | On the page (a wrong pick explains why; they pick again until right) | Kurta (100) |
 
