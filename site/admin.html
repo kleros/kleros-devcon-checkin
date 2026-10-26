@@ -297,7 +297,8 @@
     var out = [];
     if (l.email) out.push('<a href="mailto:' + esc(l.email) + '">' + esc(l.email) + '</a>');
     if (l.telegram) out.push('<a href="https://t.me/' + esc(String(l.telegram).replace(/^@/, '')) + '" target="_blank" rel="noopener">' + esc(l.telegram) + '</a>');
-    if (l.linkedin) out.push('<a href="' + esc(l.linkedin) + '" target="_blank" rel="noopener">LinkedIn</a>');
+    // Visitor-supplied URL: only http(s) becomes a link (a "javascript:" one would run here, where the key is stored).
+    if (l.linkedin) out.push(/^https?:\/\//i.test(l.linkedin) ? '<a href="' + esc(l.linkedin) + '" target="_blank" rel="noopener">LinkedIn</a>' : esc(l.linkedin));
     if (l.x) out.push('<a href="https://x.com/' + esc(String(l.x).replace(/^@/, '')) + '" target="_blank" rel="noopener">' + esc(l.x) + '</a>');
     return out.join(' · ') || '<span class="note">none</span>';
   }
