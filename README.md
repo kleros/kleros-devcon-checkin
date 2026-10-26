@@ -11,7 +11,7 @@ Visitors scan the booth QR, check in on their phone, confirm their Kleros blog s
 1. **Deploy the site** on Kleros's Netlify, like ai.kleros.io. `netlify.toml` publishes `site/` as is; connect this repo, or drag `site/` into *Deploy manually*.
 2. **Domain:** add `devcon.kleros.io` to the Netlify site, and a CNAME `devcon` → `<site-name>.netlify.app` in Cloudflare (kleros.io's DNS lives there).
 3. **Blog gate key:** a Ghost Administrator creates *Settings › Integrations › Add custom integration* and adds its Admin API key to the Apps Script project (see [Blog confirmation gate](#blog-confirmation-gate)). **Until then nobody can finish checking in.**
-4. **Telegram bot:** add the @KlerosDevconBot token and make the bot an admin of the Kleros group (see [Merch tiers and the Telegram bot](#merch-tiers-and-the-telegram-bot)). **Until then nobody can reach Purple or Gold.**
+4. **Telegram bot:** add the @KlerosDevconBot token and run `telegramSetup` (see [Merch tiers and the Telegram bot](#merch-tiers-and-the-telegram-bot)). **Until then nobody can reach Purple or Gold.**
 5. Review the points under [For review](#for-review).
 
 ## Repo layout
@@ -70,7 +70,7 @@ Guards use `require_(condition, error)`; `respond_` turns a failed one into `{ o
 bash scripts/apps-script-bundle.sh | pbcopy
 ```
 
-paste over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › Version: New version › Deploy* (same URL). Menu actions use the saved code straight away; the web app only changes on a new version. Current live version: **9** (merch tiers; the live Sheet already has its columns, added with `addMerchTierColumns`).
+paste over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › Version: New version › Deploy* (same URL). Menu actions use the saved code straight away; the web app only changes on a new version. Current live version: **10** (merch tiers; the live Sheet already has its columns, added with `addMerchTierColumns`).
 
 **From scratch:** create a standalone project at script.google.com while signed in as the Kleros account, paste the bundle, set `FOLDER_ID` in `Code.gs`, run `setup` (it creates and names the Sheet in that folder), approve permissions, deploy as a web app as above, and put the `/exec` URL in `site/config.js`.
 
@@ -86,21 +86,24 @@ Strict on purpose: with no key, or Ghost unreachable, visitors wait on "Confirm 
 
 ### Merch tiers and the Telegram bot
 
-| Tier | Needs | Checked how |
-|---|---|---|
-| Teal | Check-in + confirmed blog email | Ghost (above) |
-| Purple | + joined the Kleros Telegram group, tapped Follow on X and on LinkedIn | Telegram: @KlerosDevconBot. X and LinkedIn: counted on tap (checking needs paid APIs) |
-| Gold | + all three Kleros 101 questions right | On the page (a wrong pick explains why; they pick again until right) |
+| Tier | Needs | Checked how | Merch (stock) |
+|---|---|---|---|
+| Everyone | nothing | | Stickers, metallic tattoos (50 A5 sheets) |
+| Teal | Check-in + confirmed blog email | Ghost (above) | Flip-flops (200) |
+| Purple | + joined the Kleros Telegram group, tapped Follow on X and on LinkedIn | Telegram: @KlerosDevconBot. X and LinkedIn: counted on tap (checking needs paid APIs) | Copper bottle (100) or gamcha (100) |
+| Gold | + all three Kleros 101 questions right | On the page (a wrong pick explains why; they pick again until right) | Kurta (100) |
 
-Rewards and pictures live in `site/config.js` (`merch`), the questions in `site/quiz.js`.
+One item per person, from their tier. PoH charms (50) and PoH tees (50) are left out for now; the 28 named kurtas are the team's. Rewards and pictures live in `site/config.js` (`merch`), the questions in `site/quiz.js`.
+
+Purple and Gold are easy to reach (the quiz can't be failed), so most visitors will aim for them. Split the stock per day (about 25 kurtas and 50 Purple items a day over the four days) and give the tier below when today's runs out.
 
 **Telegram check.** The page links to `t.me/KlerosDevconBot?start=<client id>`. The visitor taps Start; the backend reads the bot's messages (`getUpdates`) whenever a waiting page polls and every minute from a trigger, asks Telegram whether that account is in the group (`getChatMember`), saves the result and replies in the chat (with a "Join the Kleros group" button if they aren't in yet). One Telegram account unlocks one check-in.
 
 Setup, once:
 
 1. **Token.** In Telegram, @BotFather › `/mybots` › KlerosDevconBot › *API Token*. Apps Script › Project settings › Script properties: `TELEGRAM_BOT_TOKEN` = the token. Never paste it anywhere else.
-2. **Group admin.** An admin of t.me/kleros adds @KlerosDevconBot as an **administrator** (no permissions needed). Telegram only lets admins look up members. As an admin the bot also receives the group's messages; the backend skips them and stores nothing.
-3. Run `telegramSetup` in the editor: it checks the token and the bot's role in the group, and installs the every-minute trigger. After Devcon, run `telegramStop`.
+2. **Group.** The bot is already in t.me/kleros as a member (added 26 Oct 2026). Telegram only guarantees member lookups to admins.
+3. Run `telegramSetup` in the editor: it checks the token, tests a member lookup, and installs the every-minute trigger. If it logs "Member lookups: NOT working", a group admin who can add admins (jean, Clément or Federico) makes @KlerosDevconBot an administrator with no permissions. As an admin the bot also receives the group's messages; the backend skips them and stores nothing. After Devcon, run `telegramStop`.
 
 Bot profile (name, description, picture `docs/telegram-bot-avatar.png`) is set in @BotFather.
 
