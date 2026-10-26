@@ -723,8 +723,8 @@ function status_(m) {
 // @KlerosDevconBot checks that a visitor joined the Kleros Telegram group. The page links to
 // t.me/KlerosDevconBot?start=<client id>; the visitor taps Start, and the backend reads the bot's new messages
 // (getUpdates) whenever a waiting page polls, and every minute from the trigger telegramSetup installs.
-// Needs TELEGRAM_BOT_TOKEN in Script properties (from @BotFather), and the bot added to the group as an admin:
-// Telegram only lets admins look up members. The token is part of every API URL, so never log a URL.
+// Needs TELEGRAM_BOT_TOKEN in Script properties (from @BotFather) and the bot in the group; Telegram only
+// guarantees member lookups to admins (telegramSetup tests it). The token is part of every API URL, so never log a URL.
 var TG_MEMBER = ['creator', 'administrator', 'member'];
 
 function tgConfig_() {
@@ -778,7 +778,7 @@ function tgUpdate_(cfg, sh, u) {
   var q = u.callback_query, msg = u.message;
   if (q) tgApi_(cfg, 'answerCallbackQuery', { callback_query_id: q.id });
   var from = q ? q.from : msg && msg.from;
-  // As a group admin the bot also receives the group's messages: skipped, never stored.
+  // As a group admin the bot would also receive the group's messages: skipped, never stored.
   if (!from || from.is_bot || (msg && msg.chat.type !== 'private')) return;
   var text = q ? '/check' : String(msg.text || '').trim();
   var start = /^\/start\s+([A-Za-z0-9_-]{1,64})$/.exec(text);
@@ -817,9 +817,13 @@ function telegramSetup() {
   if (!me.ok) { Logger.log('Telegram refused the token: ' + me.description); return; }
   tgApi_(cfg, 'deleteWebhook');   // getUpdates only works without a webhook
   tgApi_(cfg, 'setMyCommands', { commands: [{ command: 'check', description: 'Check that I joined the Kleros group' }] });
+  // Can the bot look up members? Try it on one of the group's human admins.
   var bot = tgApi_(cfg, 'getChatMember', { chat_id: cfg.group, user_id: me.result.id });
-  Logger.log('Bot @' + me.result.username + ' in ' + cfg.group + ': ' + (bot.ok ? bot.result.status : bot.description) +
-    (bot.ok && bot.result.status === 'administrator' ? ' (good)' : '. A group admin must add the bot as an admin, or no visitor can be checked.'));
+  var admins = tgApi_(cfg, 'getChatAdministrators', { chat_id: cfg.group });
+  var human = admins.ok && admins.result.filter(function (a) { return !a.user.is_bot; })[0];
+  var probe = human && tgApi_(cfg, 'getChatMember', { chat_id: cfg.group, user_id: human.user.id });
+  Logger.log('Bot @' + me.result.username + ' in ' + cfg.group + ': ' + (bot.ok ? bot.result.status : bot.description) + '. Member lookups: ' +
+    (probe && probe.ok ? 'working.' : 'NOT working. A group admin who can add admins must make the bot an admin (no permissions needed).'));
   var has = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'telegramTick'; });
   if (!has) ScriptApp.newTrigger('telegramTick').timeBased().everyMinutes(1).create();
   Logger.log('Answering the bot every minute (trigger telegramTick). Run telegramStop after Devcon.');
