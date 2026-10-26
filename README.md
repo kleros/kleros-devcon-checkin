@@ -151,7 +151,7 @@ Everything works end to end (preview + live backend, last tested 26 Oct 2026; me
 
 ## Booth QR codes
 
-`python3 qr/make_qr.py` regenerates the table card (6×8 in), square sticker and plain PNG/SVG for https://devcon.kleros.io, and checks each one scans (OpenCV and ZXing; needs `qrcode[pil]`, `opencv-python-headless`, `zxing-cpp`). Keep the finder-eye corners small (`EYE_R`) so every scanner finds the code.
+`python3 qr/make_qr.py` regenerates the booth display (`devcon-kleros-qr-display.png`/`.pdf`, A4 at 300 dpi, scales to A3/A2: "Check in & grab limited-edition merch" with the merch tiers and photos), the table card (6×8 in), square sticker and plain PNG/SVG for https://devcon.kleros.io, and checks each one scans (OpenCV and ZXing; needs `qrcode[pil]`, `opencv-python-headless`, `zxing-cpp`). Keep the finder-eye corners small (`EYE_R`) so every scanner finds the code.
 
 ## Privacy and compliance
 
