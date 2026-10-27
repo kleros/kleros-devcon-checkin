@@ -4,6 +4,11 @@ mark, Urbanist + Space Mono, and a crisp violet-to-blue QR with the Kleros mark 
 
     python3 qr/make_qr.py                      # https://devcon.kleros.io
     python3 qr/make_qr.py https://other.url    # any other address
+    python3 qr/make_qr.py --qr-art=path.png    # use a designed QR image instead of drawing one
+                                               # (it must scan to the address; the self-check fails otherwise)
+
+The footer line is read from the site (<div class="tagline"> in site/index.html), so the poster always says
+what the site says: rerun this script after changing it.
 
 Writes into qr/:
   devcon-kleros-qr-poster.png   1800x2400 portrait card (6x8 in at 300 dpi) for a table stand
@@ -16,6 +21,7 @@ The address is the same every year (devcon.kleros.io), so these can be reprinted
 Fonts are bundled in qr/fonts (SIL Open Font License).
 Needs: pip install "qrcode[pil]" (and opencv-python-headless + zxing-cpp to self-check scanning).
 """
+import html
 import os
 import re
 import sys
@@ -23,7 +29,9 @@ import sys
 import qrcode
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
-URL = sys.argv[1] if len(sys.argv) > 1 else "https://devcon.kleros.io"
+ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
+URL = ARGS[0] if ARGS else "https://devcon.kleros.io"
+QR_ART = next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--qr-art=")), "")
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(HERE, "..", "site", "assets")   # the flat Kleros mark, shared with the site
 FONTS = os.path.join(HERE, "fonts")
@@ -125,7 +133,10 @@ def symbol_png(size):
 
 
 def qr_image(size):
-    """Separated rounded modules, soft-cornered eyes, violet-to-blue ink, Kleros mark in the middle."""
+    """Separated rounded modules, soft-cornered eyes, violet-to-blue ink, Kleros mark in the middle.
+    With --qr-art, the designed image instead (scaled to the same square)."""
+    if QR_ART:
+        return Image.open(QR_ART).convert("RGBA").resize((size, size), Image.LANCZOS)
     n, eyes, dots, (c0, c) = layout(matrix())
     ss = 4
     S = size * ss
@@ -435,9 +446,22 @@ def framed_qr_card(img, x0, y0, card, qr):
     img.alpha_composite(qr_image(qr), (x0 + (card - qr) // 2, y0 + (card - qr) // 2))
 
 
+def site_tagline():
+    """The site's footer line, from <div class="tagline"> in site/index.html: [(text, colour)], with the
+    <b> part in gold like on the site."""
+    page = open(os.path.join(HERE, "..", "site", "index.html"), encoding="utf-8").read()
+    inner = re.search(r'<div class="tagline">(.*?)</div>', page, re.S).group(1)
+    parts = []
+    for i, seg in enumerate(inner.split("·")):
+        if i:
+            parts.append(("  ·  ", MUTED))
+        parts.append((html.unescape(re.sub(r"<[^>]+>", "", seg)).strip().upper(), GOLD if "<b>" in seg else MUTED))
+    return parts
+
+
 def tagline(img, y, f):
-    """The site footer: DECENTRALISED JUSTICE · HUMAN JURORS · REAL IMPACT, the middle in gold."""
-    parts = [("DECENTRALISED JUSTICE  ·  ", MUTED), ("HUMAN JURORS", GOLD), ("  ·  REAL IMPACT", MUTED)]
+    """The site footer line (site_tagline), centred, the <b> part in gold."""
+    parts = site_tagline()
     tr = f.size * 0.14
     total = sum(text_width(t, f, tr) for t, _ in parts) + tr * 2
     x = (img.width - total) / 2
