@@ -447,20 +447,20 @@ def framed_qr_card(img, x0, y0, card, qr):
 
 
 def site_tagline():
-    """The site's footer line, from <div class="tagline"> in site/index.html: [(text, colour)], with the
-    <b> part in gold like on the site."""
+    """The site's footer line, from <div class="tagline"> in site/index.html: [(text, colour)]. Like on the
+    site, the keywords are white, the <b> one gold and the dots between them muted."""
     page = open(os.path.join(HERE, "..", "site", "index.html"), encoding="utf-8").read()
     inner = re.search(r'<div class="tagline">(.*?)</div>', page, re.S).group(1)
     parts = []
     for i, seg in enumerate(inner.split("·")):
         if i:
             parts.append(("  ·  ", MUTED))
-        parts.append((html.unescape(re.sub(r"<[^>]+>", "", seg)).strip().upper(), GOLD if "<b>" in seg else MUTED))
+        parts.append((html.unescape(re.sub(r"<[^>]+>", "", seg)).strip().upper(), GOLD if "<b>" in seg else WHITE))
     return parts
 
 
 def tagline(img, y, f):
-    """The site footer line (site_tagline), centred, the <b> part in gold."""
+    """The site footer line (site_tagline), centred."""
     parts = site_tagline()
     tr = f.size * 0.14
     total = sum(text_width(t, f, tr) for t, _ in parts) + tr * 2
