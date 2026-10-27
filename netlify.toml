@@ -8,3 +8,9 @@
   from = "/admin"
   to = "/admin.html"
   status = 200
+
+# The "Connect with the Kleros team" page at /connect as well as /connect.html.
+[[redirects]]
+  from = "/connect"
+  to = "/connect.html"
+  status = 200

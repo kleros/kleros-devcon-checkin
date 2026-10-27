@@ -20,6 +20,7 @@ Short version: [`docs/DEPLOY.md`](docs/DEPLOY.md). `bash scripts/package.sh` bui
 | Path | What it is |
 |---|---|
 | `site/index.html` | Visitor page: merch tier ladder and form → "Confirm your email" → final screen (tier ticket, level-up steps, Kleros 101, "Picked for you") |
+| `site/connect.html` | "Connect with the Kleros team": the hot-lead form (button at the bottom of the check-in page and of the ticket), saved to the *Hot leads* tab |
 | `site/admin.html` | Team dashboard: stats, lead list, optional merch desk, CSV export (`/admin`, needs the dashboard key) |
 | `site/matching.js` | Use-case matching rules, shared by the page, the dashboard and the backend |
 | `site/config.js` | Backend URL, edition/city, privacy contact, blog URL, merch tiers, Telegram bot and follow links, Community Hubs card |
@@ -39,7 +40,7 @@ Run locally: `python3 -m http.server -d site 8000`. Note `config.js` points at t
 
 ## How a check-in works
 
-1. **Form.** Name, company, role, job level, **email** (required), optional Telegram/LinkedIn/X, interests (four focus cards, "Others" with free text, extra chips), optional free text, optional "Book a call", and an optional "Subscribe me to the Kleros blog" box.
+1. **Form.** Name, company, role, job level, **email** (required), optional Telegram/LinkedIn/X, interests (four focus cards, "Others" with free text, extra chips), optional free text, and an optional "Subscribe me to the Kleros blog" box. (No "Book a call": people who want a follow-up use the Connect page, below.)
 2. **Saved.** The check-in is queued on the phone and posted to the backend; it leaves the queue only when the backend confirms the save (retries are safe, the backend dedupes on a client id). `keepalive` lets it finish if the visitor closes the page.
 3. **Blog sign-up (only if they ticked the box).** The page asks Ghost (blog.kleros.io) to send its own "Complete your sign up" email. Ghost only creates the subscriber once they tap *Confirm signup*. Visitors who leave the box unticked skip steps 3–4 and go straight to the final screen.
 4. **Confirm your email.** The page polls the backend every 4 s (immediately when the visitor returns from their mail app). Ghost's webhook marks **Newsletter = Confirmed** in the Sheet (*Yes* = ticked, not confirmed yet; *No* = box left unticked). With the wait off, the screen still stays up 15 s before moving on.
@@ -72,7 +73,7 @@ Guards use `require_(condition, error)`; `respond_` turns a failed one into `{ o
 bash scripts/apps-script-bundle.sh | pbcopy
 ```
 
-paste over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › Version: New version › Deploy* (same URL). Menu actions use the saved code straight away; the web app only changes on a new version. Current live version: **17** (blog gate via Ghost webhooks with an on/off switch and a webhook call log; merch tier columns already added with `addMerchTierColumns`).
+paste over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › Version: New version › Deploy* (same URL). Menu actions use the saved code straight away; the web app only changes on a new version. Current live version: **18** (blog gate via Ghost webhooks with an on/off switch and a webhook call log; merch tier columns already added with `addMerchTierColumns`).
 
 **From scratch:** create a standalone project at script.google.com while signed in as the Kleros account, paste the bundle, set `FOLDER_ID` in `Code.gs`, run `setup` (it creates and names the Sheet in that folder), approve permissions, deploy as a web app as above, and put the `/exec` URL in `site/config.js`.
 
@@ -91,6 +92,12 @@ Why a secret in the URL: Apps Script can't read Ghost's `X-Ghost-Signature` head
 **Switch (live setting: OFF since 27 Oct).** Run `blogGateOff` in the editor and the booth stops waiting: visitors reach the final screen and merch right after checking in, and the blog card asks them to tap the link in Ghost's email. Only this site's waiting step changes. Ghost still emails them and subscribes them only once they tap the link (Kleros's double opt-in is untouched), and a webhook confirmation still sets *Newsletter* to `Confirmed`. `blogGateOn` restores the wait. `ghostWebhookStatus` shows which way it is set.
 
 Strict on purpose: until `ghostWebhookSetup` has run, visitors wait on "Confirm your email" and see "Confirmation check is offline. Please ask the Kleros team." Nobody is waved through. An existing subscriber who already opened the blog that day gets no new event; set their row's *Newsletter* to `Confirmed` in the Sheet to let them through.
+
+### Connect with the Kleros team (hot leads)
+
+A quiet button at the bottom of the check-in page and of the ticket opens `connect.html` (also at `/connect`). It is for people who want a real follow-up, not merch: name, company, email, what they want to talk about (using Kleros in their product, a pilot, partnership, speaking/research/media, other), what they are building, timing, how to reach them, and who they talked to at the booth. It is pre-filled when they checked in on the same phone, and offline-safe like the check-in.
+
+The backend (`POST {action:'connect', rid, …}`) adds one row to the **Hot leads** tab (deduped on `rid`), with empty *Follow-up owner*, *Status* (starts as New) and *Team notes* for the team. If the same email checked in, that Leads row gets *Wants call = Yes* and fresh matching, so it shows as Hot everywhere and the Dashboard counts it.
 
 ### Merch tiers and the Telegram bot
 
