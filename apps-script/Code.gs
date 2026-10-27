@@ -451,6 +451,7 @@ function doPost(e) {
     var p = e.parameter || {};
     if (p.hook === 'ghost') return ghostHook_(e, p);
     var d = body_(e);
+    if (d.member && !d.action) hookLog_({ result: 'Ghost payload without ?hook=ghost', params: Object.keys(p) });
     // Polled every few seconds by visitors confirming their email; it only reads (plus one cell), so no write lock.
     if (d.action === 'verify') return verify_(d);
     var lock = LockService.getScriptLock();
@@ -618,19 +619,34 @@ var WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzxw7RFUWHJGAD78-9hdm
 // other member's email only sits in the script cache for 6 hours, in case their check-in is still queued on
 // their phone, and is never stored. No lock: it reads one column and writes single cells.
 function ghostHook_(e, p) {
-  var secret = ghostSecret_();
-  require_(secret && p.secret === secret, 'unauthorised');
+  // A URL copied out of Slack can keep "&amp;" for "&", which turns the parameter into "amp;secret".
+  var secret = ghostSecret_(), given = String(p.secret || p['amp;secret'] || '');
+  if (!(secret && given === secret)) hookLog_({ result: 'unauthorised', params: Object.keys(p), givenLength: given.length, secretSet: !!secret });
+  require_(secret && given === secret, 'unauthorised');
   var d = body_(e);
   var email = String(((d.member || {}).current || {}).email || '').trim().toLowerCase();
-  if (d.event === 'member.deleted' || !email) return json_({ ok: true });
+  if (d.event === 'member.deleted' || !email) { hookLog_({ result: 'ignored', event: d.event, email: !!email }); return json_({ ok: true }); }
   CacheService.getScriptCache().put('ghost:' + email, '1', 21600);
-  var sh = sheet_(LEADS), last = lastRow_(sh);
-  if (last < 3) return json_({ ok: true });
-  var emails = sh.getRange(3, col_('Email'), last - 2, 1).getValues(), news = sh.getRange(3, col_('Newsletter'), last - 2, 1).getValues();
-  emails.forEach(function (r, i) {
-    if (String(r[0]).trim().toLowerCase() === email && news[i][0] !== 'Confirmed') sh.getRange(i + 3, col_('Newsletter')).setValue('Confirmed');
-  });
+  var sh = sheet_(LEADS), last = lastRow_(sh), marked = 0;
+  if (last >= 3) {
+    var emails = sh.getRange(3, col_('Email'), last - 2, 1).getValues(), news = sh.getRange(3, col_('Newsletter'), last - 2, 1).getValues();
+    emails.forEach(function (r, i) {
+      if (String(r[0]).trim().toLowerCase() === email && news[i][0] !== 'Confirmed') { sh.getRange(i + 3, col_('Newsletter')).setValue('Confirmed'); marked++; }
+    });
+  }
+  hookLog_({ result: 'ok', event: d.event, checkInsMarked: marked });
   return json_({ ok: true });
+}
+
+// The last 10 webhook calls, for ghostWebhookStatus: parameter names and lengths, never the secret or an email.
+// (Apps Script keeps no console logs for anonymous web app calls.)
+function hookLog_(entry) {
+  try {
+    var p = PropertiesService.getScriptProperties(), log = JSON.parse(p.getProperty('GHOST_HOOK_LOG') || '[]');
+    entry.at = new Date().toISOString();
+    log.unshift(entry);
+    p.setProperty('GHOST_HOOK_LOG', JSON.stringify(log.slice(0, 10)));
+  } catch (err) { /* diagnostics only */ }
 }
 
 // Has Ghost reported this email in the last 6 hours? (Rows it matched are already marked Confirmed.)
@@ -850,6 +866,12 @@ function ghostWebhookSetup() {
   var p = PropertiesService.getScriptProperties();
   if (!ghostSecret_()) p.setProperty('GHOST_WEBHOOK_SECRET', Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, ''));
   Logger.log('Ghost webhook target URL (member.added and member.edited): ' + WEB_APP_URL + '?hook=ghost&secret=' + ghostSecret_());
+}
+
+/** Run from the editor: the last 10 Ghost webhook calls and how each went (no secrets or emails in it). */
+function ghostWebhookStatus() {
+  Logger.log('Webhook secret set: ' + !!ghostSecret_());
+  JSON.parse(PropertiesService.getScriptProperties().getProperty('GHOST_HOOK_LOG') || '[]').forEach(function (x) { Logger.log(JSON.stringify(x)); });
 }
 
 /* ------------------------------------------------------------- examples */
