@@ -121,6 +121,13 @@
   .hero p strong { color: var(--text); font-weight: 600; }
   .lanes { list-style: none; padding: 0; margin: 16px 0 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 0; }
   .lanes li { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--teal); }
+  /* "Connect with the Kleros team": a quiet paper-style button, unlike the purple merch flow. */
+  .team-cta { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 18px 0; padding: 14px 18px; border-radius: 16px;
+    background: rgba(251, 249, 255, .96); color: #1b1240; text-decoration: none; border-top: 3px solid #c8962f; box-shadow: 0 10px 28px rgba(5, 0, 25, .35); }
+  .team-cta b { display: block; font: 700 16px Urbanist, Inter, sans-serif; }
+  .team-cta small { display: block; margin-top: 2px; font-size: 12.5px; color: #4a4170; }
+  .team-cta i { font-style: normal; font-size: 20px; color: #4d00b4; }
+  .team-cta:hover { background: #fff; }
   .lanes li + li::before { content: "◆"; color: var(--gold); font-size: 7px; margin: 0 9px; vertical-align: 2px; }
 
   .card {
@@ -584,10 +591,9 @@
         <input id="building" name="building" type="text" placeholder="One line is plenty" maxlength="200">
       </div>
 
-      <label class="toggle"><input type="checkbox" id="wantsCall"> <span><b>Book a call with the Kleros team after Devcon</b><br><span class="opt">Someone from the team will reach out to you soon.</span></span></label>
       <label class="toggle"><input type="checkbox" id="newsletter"> <span>Subscribe me to the Kleros blog for updates and event invites <span class="opt">Unsubscribe anytime.</span></span></label>
 
-      <button class="primary" type="submit" id="submit">Connect with Kleros</button>
+      <button class="primary" type="submit" id="submit">Check in</button>
       <p class="fine"><span class="req">*</span> Required. Your details go to the Kleros team only. Never sold or shared.</p>
       <details class="privacy" id="privacy">
         <summary>How your details are used</summary>
@@ -597,6 +603,10 @@
         <p><b>Your choices:</b> unsubscribe from any email, or ask us to see, correct or delete your details at any time: <span id="privacy-contact"></span>, or at the booth.</p>
       </details>
     </form>
+
+    <a class="team-cta" href="connect.html">
+      <span><b>Connect with the Kleros team</b><small>Building something? Tell us and we’ll follow up after Devcon.</small></span><i aria-hidden="true">→</i>
+    </a>
   </section>
 
   <section id="confirm-view" aria-live="polite">
@@ -723,6 +733,10 @@
       <div class="meta" id="s-meta"></div>
     </div>
 
+    <a class="team-cta" href="connect.html">
+      <span><b>Connect with the Kleros team</b><small>Building something? Tell us and we’ll follow up after Devcon.</small></span><i aria-hidden="true">→</i>
+    </a>
+
     <div class="links">
       <a href="https://t.me/kleros" target="_blank" rel="noopener">Telegram</a>
       <a href="https://x.com/kleros_io" target="_blank" rel="noopener" id="link-x">Follow on X</a>
@@ -733,7 +747,7 @@
     <button class="ghost" id="again" type="button">Check in someone else</button>
   </section>
 
-  <div class="tagline">Decentralised justice · <b>Human jurors</b> · Real impact</div>
+  <div class="tagline">Verified agents · Protected payments · <b>Fast, fair rulings</b></div>
 </main>
 
 <script src="config.js"></script>
@@ -1411,7 +1425,7 @@
     document.querySelectorAll('.invalid').forEach(function (c) { c.classList.remove('invalid'); });
     $('other-wrap').hidden = true;
     $('foryou').hidden = true; $('also-list').hidden = true; $('blog').hidden = true;
-    $('submit').disabled = false; $('submit').textContent = 'Connect with Kleros';
+    $('submit').disabled = false; $('submit').textContent = 'Check in';
     document.body.classList.remove('show-done');
     window.scrollTo({ top: 0 });
     if (KIOSK) $('name').focus();
@@ -1490,13 +1504,13 @@
     if (!KIOSK) store(K_SELF, null);
     if (rec && !$('name').value) fillForm(rec);
     document.body.classList.remove('show-confirm');
-    $('submit').disabled = false; $('submit').textContent = 'Connect with Kleros';
+    $('submit').disabled = false; $('submit').textContent = 'Check in';
     $('email').focus(); $('email').select();
   };
   function fillForm(rec) {
     ['name', 'company', 'position', 'seniority', 'email', 'klerosUse', 'building'].forEach(function (f) { $(f).value = rec[f] || ''; });
     $('telegram').value = rec.telegram ? '@' + rec.telegram : ''; $('x').value = rec.x ? '@' + rec.x : ''; $('linkedin').value = rec.linkedin || '';
-    $('wantsCall').checked = !!rec.wantsCall; $('newsletter').checked = !!rec.newsletter;
+    $('newsletter').checked = !!rec.newsletter;
     document.querySelectorAll('.fcard[data-v],.chip[data-v]').forEach(function (c) { c.setAttribute('aria-pressed', (rec.interests || []).indexOf(c.getAttribute('data-v')) >= 0 ? 'true' : 'false'); });
     if (rec.otherInterest) { $('other-chip').setAttribute('aria-pressed', 'true'); $('other-wrap').hidden = false; $('otherInterest').value = rec.otherInterest; }
   }
@@ -1516,7 +1530,6 @@
       otherInterest: $('other-chip').getAttribute('aria-pressed') === 'true' ? clean($('otherInterest').value) : '',
       klerosUse: clean($('klerosUse').value),
       building: clean($('building').value),
-      wantsCall: $('wantsCall').checked,
       newsletter: $('newsletter').checked
     };
     if (!validate(d)) return;
@@ -1526,7 +1539,7 @@
     d.source = KIOSK ? 'kiosk' : 'qr';
     d.event = CFG.event || 'Devcon';
 
-    $('submit').disabled = true; $('submit').textContent = 'Connecting…';
+    $('submit').disabled = true; $('submit').textContent = 'Checking in…';
     var q = store(K_QUEUE) || []; q.push(d); store(K_QUEUE, q);
     if (BLOG && d.newsletter && d.email) { var bq = store(K_BLOG) || []; bq.push({ email: d.email, name: d.name }); store(K_BLOG, bq); }
     if (!KIOSK) store(K_SELF, d);
