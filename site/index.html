@@ -585,10 +585,7 @@
       </div>
 
       <label class="toggle"><input type="checkbox" id="wantsCall"> <span><b>Book a call with the Kleros team after Devcon</b><br><span class="opt">Someone from the team will reach out to you soon.</span></span></label>
-      <div class="field" data-f="consent" style="margin:0">
-        <label class="toggle"><input type="checkbox" id="newsletter" required> <span>Subscribe me to the Kleros blog for updates and event invites<span class="req" aria-hidden="true">*</span> <span class="opt">Unsubscribe anytime.</span></span></label>
-        <div class="error" style="margin-left:35px">Tick this box to continue.</div>
-      </div>
+      <label class="toggle"><input type="checkbox" id="newsletter"> <span>Subscribe me to the Kleros blog for updates and event invites <span class="opt">Unsubscribe anytime.</span></span></label>
 
       <button class="primary" type="submit" id="submit">Connect with Kleros</button>
       <p class="fine"><span class="req">*</span> Required. Your details go to the Kleros team only. Never sold or shared.</p>
@@ -641,7 +638,7 @@
       <div class="ladder" aria-hidden="true"><i class="t-teal"></i><i class="t-purple"></i><i class="t-gold"></i></div>
       <p class="next" id="lu-next"></p>
       <ol class="steps">
-        <li class="step done"><span class="tick" aria-hidden="true"></span><div><b>Check in and confirm your email</b></div></li>
+        <li class="step done"><span class="tick" aria-hidden="true"></span><div><b>Check in</b></div></li>
         <li class="step wide t-purple" id="st-tg"><span class="tick" aria-hidden="true"></span>
           <div><b>Join the Kleros Telegram<span class="tag">Purple</span></b><small id="tg-status"></small></div>
           <div class="acts"><a class="btn alt" id="tg-join" href="https://t.me/kleros" target="_blank" rel="noopener">1 · Join the group</a><a class="btn" id="tg-go" href="https://t.me/KlerosDevconBot" target="_blank" rel="noopener">2 · Verify with our bot</a></div>
@@ -834,7 +831,6 @@
   document.getElementById('form').addEventListener('click', function (e) {
     if (e.target.closest && e.target.closest('.fcard,.chip')) setInvalid('interests', false);
   });
-  $('newsletter').addEventListener('change', function () { if ($('newsletter').checked) setInvalid('consent', false); });
   $('email').addEventListener('input', function () { setInvalid('email', false); });
 
   function validate(d) {
@@ -844,11 +840,10 @@
     check('company', !d.company);
     check('position', !d.position);
     check('seniority', !d.seniority);
-    // Email is required: it's how we follow up and how the Kleros blog subscription reaches them.
+    // Email is required: it's how we follow up (and how the Kleros blog reaches those who tick the box).
     $('email-error').textContent = d.email ? 'That email looks off. Mind checking it?' : 'Please add your email.';
     check('email', !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email));
     check('interests', !(d.interests.length || d.otherInterest));
-    check('consent', !d.newsletter);
     if (first) {
       var el = document.querySelector('[data-f="' + first + '"]');
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1063,13 +1058,14 @@
   }
 
   // ---- Merch tiers ----
-  // Teal: checked in and confirmed the blog email. Purple: also joined the Kleros Telegram (checked by the bot)
-  // and tapped Follow on X and LinkedIn (counted on tap). Gold: also got all of Kleros 101 right. The ladder sits
-  // above the form so visitors know what more steps unlock; the ticket shows the tier with a ticking clock.
+  // Teal: checked in (and, if they ticked the blog box while the backend waits for it, confirmed the email).
+  // Purple: also joined the Kleros Telegram (checked by the bot) and tapped Follow on X and LinkedIn (counted on
+  // tap). Gold: also got all of Kleros 101 right. The ladder sits above the form so visitors know what more steps
+  // unlock; the ticket shows the tier with a ticking clock.
   var MERCH = CFG.merch && (CFG.merch.tiers || []).length === 3 ? CFG.merch : null;
   var TG = CFG.telegram || {}, FOLLOW = CFG.follow || {}, QUIZ = window.KLEROS_QUIZ || [];
   var TIERS = ['teal', 'purple', 'gold'];
-  var TIER_HOW = ['Check in and confirm your email', '+ Join the Kleros Telegram, follow Kleros on X and LinkedIn', '+ Get all 3 Kleros 101 questions right'];
+  var TIER_HOW = ['Check in', '+ Join the Kleros Telegram, follow Kleros on X and LinkedIn', '+ Get all 3 Kleros 101 questions right'];
   // `short` reads inside a sentence ("a Kleros kurta"); `reward` is the label on the ladder and the ticket.
   function short(i) { return MERCH.tiers[i].short || MERCH.tiers[i].reward; }
   function thumbs(imgs) {
@@ -1536,15 +1532,18 @@
     if (!KIOSK) store(K_SELF, d);
     lastResend = Date.now();
     $('sync').textContent = 'Saving…'; $('sync').className = 'sync';
-    if (ENDPOINT && BLOG) showConfirm(d); else showDone(d);
-    syncAll().then(syncLabel);
+    // Only visitors who ticked the blog box see "Confirm your email"; everyone else goes straight to their ticket,
+    // and its status (tier, "Already claimed") follows once the check-in is saved.
+    if (ENDPOINT && BLOG && d.newsletter) showConfirm(d);
+    else { d.synced = false; showDone(d); }
+    syncAll().then(function (n) { syncLabel(n); if (doneRec === d) syncStatus(); });
   });
 
   // Returning visitor on their own phone: their ticket again (with a fresh status: the bot may have answered
   // meanwhile), or the confirm step if they haven't confirmed yet.
   var me = !KIOSK && store(K_SELF);
   if (me && me.ticket) {
-    if (me.confirmed || !ENDPOINT || !BLOG) { showDone(me); syncStatus(); } else showConfirm(me);
+    if (me.confirmed || !me.newsletter || !ENDPOINT || !BLOG) { showDone(me); syncStatus(); } else showConfirm(me);
     syncAll().then(syncLabel);
   }
   else syncAll();
