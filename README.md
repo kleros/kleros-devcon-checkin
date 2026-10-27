@@ -72,7 +72,7 @@ Guards use `require_(condition, error)`; `respond_` turns a failed one into `{ o
 bash scripts/apps-script-bundle.sh | pbcopy
 ```
 
-paste over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › Version: New version › Deploy* (same URL). Menu actions use the saved code straight away; the web app only changes on a new version. Current live version: **15** (blog gate via Ghost webhooks with an on/off switch and a webhook call log; merch tier columns already added with `addMerchTierColumns`).
+paste over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › Version: New version › Deploy* (same URL). Menu actions use the saved code straight away; the web app only changes on a new version. Current live version: **16** (blog gate via Ghost webhooks with an on/off switch and a webhook call log; merch tier columns already added with `addMerchTierColumns`).
 
 **From scratch:** create a standalone project at script.google.com while signed in as the Kleros account, paste the bundle, set `FOLDER_ID` in `Code.gs`, run `setup` (it creates and names the Sheet in that folder), approve permissions, deploy as a web app as above, and put the `/exec` URL in `site/config.js`.
 
