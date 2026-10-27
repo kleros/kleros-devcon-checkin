@@ -19,7 +19,7 @@ The printed booth QR codes point to devcon.kleros.io, so this must be live befor
 
 ## 2. Backend (Google Apps Script)
 
-Already deployed (web app version 12), owned by weiwei@kleros.io. Nothing to do unless the code changes. To change it: paste `backend/Code.gs` from this package (or `bash scripts/apps-script-bundle.sh | pbcopy` from the repo) over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › New version › Deploy*. The URL stays the same.
+Already deployed (web app version 14), owned by weiwei@kleros.io. Nothing to do unless the code changes. To change it: paste `backend/Code.gs` from this package (or `bash scripts/apps-script-bundle.sh | pbcopy` from the repo) over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › New version › Deploy*. The URL stays the same.
 
 ## 3. Keys (Apps Script › Project settings › Script properties)
 
