@@ -72,7 +72,7 @@ Guards use `require_(condition, error)`; `respond_` turns a failed one into `{ o
 bash scripts/apps-script-bundle.sh | pbcopy
 ```
 
-paste over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › Version: New version › Deploy* (same URL). Menu actions use the saved code straight away; the web app only changes on a new version. Current live version: **14** (blog gate via Ghost webhooks, with a webhook call log; merch tier columns already added with `addMerchTierColumns`).
+paste over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › Version: New version › Deploy* (same URL). Menu actions use the saved code straight away; the web app only changes on a new version. Current live version: **15** (blog gate via Ghost webhooks with an on/off switch and a webhook call log; merch tier columns already added with `addMerchTierColumns`).
 
 **From scratch:** create a standalone project at script.google.com while signed in as the Kleros account, paste the bundle, set `FOLDER_ID` in `Code.gs`, run `setup` (it creates and names the Sheet in that folder), approve permissions, deploy as a web app as above, and put the `/exec` URL in `site/config.js`.
 
@@ -88,6 +88,8 @@ The page signs visitors up through Ghost's public members API, and Ghost emails 
 
 Why a secret in the URL: Apps Script can't read Ghost's `X-Ghost-Signature` header. The backend keeps an email only when it matches a check-in (as *Newsletter = Confirmed*); any other member's email sits in the script cache for 6 hours and is never stored. Ghost may show the deliveries as failed, because Apps Script answers POSTs with a redirect; the backend still gets them. **Not confirming?** Run `ghostWebhookStatus` in the editor: it logs the last 10 webhook calls (parameter names and lengths, no secrets or emails). `params: ["hook"]` with `givenLength: 0` means the Target URL in Ghost lost its `&secret=…` part.
 
+**Switch (live setting: OFF since 27 Oct).** Run `blogGateOff` in the editor and the booth stops waiting: visitors reach the final screen and merch right after checking in, and the blog card asks them to tap the link in Ghost's email. Only this site's waiting step changes. Ghost still emails them and subscribes them only once they tap the link (Kleros's double opt-in is untouched), and a webhook confirmation still sets *Newsletter* to `Confirmed`. `blogGateOn` restores the wait. `ghostWebhookStatus` shows which way it is set.
+
 Strict on purpose: until `ghostWebhookSetup` has run, visitors wait on "Confirm your email" and see "Confirmation check is offline. Please ask the Kleros team." Nobody is waved through. An existing subscriber who already opened the blog that day gets no new event; set their row's *Newsletter* to `Confirmed` in the Sheet to let them through.
 
 ### Merch tiers and the Telegram bot
@@ -95,7 +97,7 @@ Strict on purpose: until `ghostWebhookSetup` has run, visitors wait on "Confirm 
 | Tier | Needs | Checked how | Merch (stock) |
 |---|---|---|---|
 | Everyone | nothing | | Stickers, metallic tattoos (50 A5 sheets) |
-| Teal | Check-in + confirmed blog email | Ghost webhooks (above) | Flip-flops (200) |
+| Teal | Check-in + blog email (confirmed, unless the switch is off) | Ghost webhooks (above) | Flip-flops (200) |
 | Purple | + joined the Kleros Telegram group, tapped Follow on X and on LinkedIn | Telegram: @KlerosDevconBot. X and LinkedIn: counted on tap (checking needs paid APIs) | Copper bottle (100) or gamcha (100) |
 | Gold | + all three Kleros 101 questions right | On the page (a wrong pick explains why; they pick again until right) | Kurta (100) |
 
