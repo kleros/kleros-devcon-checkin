@@ -28,7 +28,7 @@ Already deployed (web app version 18), owned by weiwei@kleros.io. Nothing to do 
 | `GHOST_WEBHOOK_SECRET` | Made by the code: run `ghostWebhookSetup`, which logs the webhook target URL | Ghost admin › Settings › Integrations › custom integration "Devcon booth" › add webhooks *Member added* and *Member edited*, both with that URL |
 | `TELEGRAM_BOT_TOKEN` | @KlerosDevconBot's token from @BotFather | `telegramSetup` |
 
-No Ghost API key is needed: Ghost calls the backend, never the other way round. The booth currently doesn't wait for the email confirmation (`blogGateOff`; `blogGateOn` turns the wait back on); Ghost's own double opt-in is unchanged either way. Without the webhooks nobody gets past "Confirm your email"; without the bot token nobody reaches Purple or Gold. The webhook URL and the token are secrets: share them only in private messages.
+No Ghost API key is needed: Ghost calls the backend, never the other way round. The booth doesn't wait for the email confirmation and stays that way for Devcon (`blogGateOff`; the blog box is optional); Ghost's own double opt-in is unchanged either way. The webhooks then only mark *Newsletter* `Confirmed` in the sheet, so the booth works without them. If the wait is ever turned back on (`blogGateOn`), visitors who tick the box need the webhooks to get past "Confirm your email". Without the bot token nobody reaches Purple or Gold. The webhook URL and the token are secrets: share them only in private messages.
 
 ## 4. Check
 
