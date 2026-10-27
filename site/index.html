@@ -353,6 +353,14 @@
   .q-explain.bad .verdict { color: var(--danger); } .q-explain.good .verdict { color: #6dffb0; }
   .q-explain p { margin: 0; }
   .q-explain .go { display: inline-block; margin-top: 10px; color: var(--teal); font-weight: 600; font-size: 13.5px; text-decoration: none; }
+  .q-more { display: inline-block; margin-top: 10px; padding: 0; background: none; border: 0; color: var(--teal); font: 600 13.5px Inter, system-ui, sans-serif; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .q-deep { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--field-line); animation: rise .3s cubic-bezier(.2, .8, .2, 1); }
+  .q-deep p, .q-deep ol { margin: 0; color: var(--text); }
+  .q-deep ol { padding-left: 18px; display: grid; gap: 5px; }
+  .art-reads { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; max-width: 220px; margin: 0 auto 10px; }
+  .art-reads i { aspect-ratio: 1; border-radius: 50%; animation: pop .35s cubic-bezier(.2, .8, .2, 1.4) backwards; }
+  .art-reads i.one { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+  .art-reads i.other { background: var(--teal); box-shadow: 0 0 8px var(--teal); }
   .q-art { margin: 12px 0 2px; }
   .q-art .cap { display: block; text-align: center; font-size: 11.5px; color: var(--muted); margin-top: 8px; letter-spacing: .02em; }
   .art-pool { display: grid; grid-template-columns: repeat(8, 1fr); gap: 7px; max-width: 230px; margin: 0 auto; }
@@ -1256,10 +1264,30 @@
       p.textContent = item.options[last][1];
       ex.appendChild(v); ex.appendChild(p);
       if (q.solved && item.art) ex.appendChild(quizArt(item.art));
-      if (q.solved && item.more) {
-        var a = document.createElement('a');
-        a.className = 'go'; a.href = item.more[1]; a.target = '_blank'; a.rel = 'noopener'; a.textContent = item.more[0] + ' →';
-        ex.appendChild(a);
+      // "Want to know more?" first opens a short deeper explanation; the docs link only comes after it.
+      if (q.solved && (item.deep || item.more)) {
+        if (!q.open) {
+          var more = document.createElement('button');
+          more.type = 'button'; more.className = 'q-more'; more.textContent = 'Want to know more?';
+          more.onclick = function () { q.open = true; keep(rec); renderQuiz(rec); };
+          ex.appendChild(more);
+        } else {
+          var deep = document.createElement('div');
+          deep.className = 'q-deep';
+          if (Array.isArray(item.deep)) {
+            var ol = document.createElement('ol');
+            item.deep.forEach(function (s) { var li = document.createElement('li'); li.textContent = s; ol.appendChild(li); });
+            deep.appendChild(ol);
+          } else if (item.deep) {
+            var dp = document.createElement('p'); dp.textContent = item.deep; deep.appendChild(dp);
+          }
+          if (item.more) {
+            var a = document.createElement('a');
+            a.className = 'go'; a.href = item.more[1]; a.target = '_blank'; a.rel = 'noopener'; a.textContent = item.more[0] + ' →';
+            deep.appendChild(a);
+          }
+          ex.appendChild(deep);
+        }
       }
     }
     $('q-next').hidden = !q.solved;
@@ -1283,7 +1311,7 @@
     var rec = doneRec;
     if (!rec || !quizOf(rec).solved) return;
     var q = quizOf(rec), m = merchOf(rec);
-    if (q.i < QUIZ.length - 1) { q.i++; q.tried = []; q.solved = false; }
+    if (q.i < QUIZ.length - 1) { q.i++; q.tried = []; q.solved = false; q.open = false; }
     else { m.quiz = true; rec.synced = false; }
     keep(rec); renderQuiz(rec); renderMerch(rec);
     $('quiz').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1303,6 +1331,26 @@
         pool.appendChild(d);
       }
       el.appendChild(pool); cap.textContent = '3 jurors drawn at random from the pool';
+    } else if (kind === 'triage') {
+      // Nine independent AI reads of one case: here they split, so it goes to human jurors.
+      var reads = document.createElement('div'), split = [0, 0, 1, 0, 0, 1, 0, 0, 1];
+      reads.className = 'art-reads';
+      split.forEach(function (s, k) {
+        var r = document.createElement('i');
+        r.className = s ? 'other' : 'one'; r.style.animationDelay = (0.15 + k * 0.12) + 's';
+        reads.appendChild(r);
+      });
+      var steps = document.createElement('div');
+      steps.className = 'art-flow';
+      ['Escrow holds it', '9 AI reads', 'Split? Human jurors', 'Refund or pay out'].forEach(function (s, k) {
+        if (k) { var ar = document.createElement('i'); ar.textContent = '→'; ar.style.animationDelay = (1.3 + k * 0.35 - 0.2) + 's'; steps.appendChild(ar); }
+        var sp = document.createElement('span');
+        sp.textContent = s; sp.style.animationDelay = (1.3 + k * 0.35) + 's';
+        if (k === 2) sp.className = 'key';
+        steps.appendChild(sp);
+      });
+      el.appendChild(reads); el.appendChild(steps);
+      cap.textContent = 'Reads agree: settled in minutes. Reads split: human jurors decide';
     } else if (kind === 'escrow') {
       var flow = document.createElement('div');
       flow.className = 'art-flow';
@@ -1380,32 +1428,46 @@
   // confirmed their Kleros blog subscription (the link in Ghost's own email). Ghost reports it to the backend
   // by webhook, and the backend answers { confirmed }. Strict: with no webhook set up ({ setup: false }) nobody gets through.
   var pending = null, pollTimer = null, lastResend = 0;
+  // When the backend doesn't wait for the blog confirmation (it answers gate: false), the email prompt still
+  // stays up this long after it first appeared, so visitors open the Kleros blog email before their merch screen.
+  var CONFIRM_HOLD = 15000, holdTimer = null;
+  function passConfirm(rec, res) {
+    pending = null;
+    rec.confirmed = true; rec.blogVerified = res.gate !== false;
+    applyStatus(rec, res);
+    keep(rec);
+    document.body.classList.remove('show-confirm');
+    showDone(rec);
+    syncLabel((store(K_QUEUE) || []).length);
+  }
   function verifyNow() {
     var rec = pending;
-    if (!rec) return;
+    if (!rec || holdTimer) return;
     clearTimeout(pollTimer);
     fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'verify', id: rec.id }) })
       .then(function (r) { return r.json(); })
       .then(function (res) {
         if (pending !== rec) return;
         if (res.ok && res.confirmed) {
-          pending = null;
-          rec.confirmed = true; rec.blogVerified = res.gate !== false;
-          applyStatus(rec, res);
-          keep(rec);
-          document.body.classList.remove('show-confirm');
-          showDone(rec);
-          syncLabel((store(K_QUEUE) || []).length);
+          var hold = res.gate === false ? (rec.askedAt || 0) + CONFIRM_HOLD - Date.now() : 0;
+          if (hold > 0) {
+            $('c-status').textContent = 'Waiting for your confirmation…';
+            holdTimer = setTimeout(function () { holdTimer = null; if (pending === rec) passConfirm(rec, res); }, hold);
+            return;
+          }
+          passConfirm(rec, res);
           return;
         }
         $('c-status').textContent = res.setup === false ? 'Confirmation check is offline. Please ask the Kleros team.'
           : res.pending ? 'Saving your check-in…' : 'Waiting for your confirmation…';
       })
       .catch(function () { if (pending === rec) $('c-status').textContent = 'No connection yet. Retrying…'; })
-      .then(function () { if (pending === rec) pollTimer = setTimeout(verifyNow, document.hidden ? 15000 : 4000); });
+      .then(function () { if (pending === rec && !holdTimer) pollTimer = setTimeout(verifyNow, document.hidden ? 15000 : 4000); });
   }
   function showConfirm(rec) {
     pending = rec;
+    clearTimeout(holdTimer); holdTimer = null;
+    if (!rec.askedAt) { rec.askedAt = Date.now(); keep(rec); }
     $('c-email').textContent = rec.email;
     $('c-status').textContent = 'Waiting for your confirmation…';
     document.body.classList.add('show-confirm');
