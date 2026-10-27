@@ -560,7 +560,7 @@ function get_(p) {
       'Already claimed: this email or Telegram account got merch on another check-in.');
     // Merch only once the visitor has confirmed their blog subscription, as Ghost reported it, so it never
     // depends on what the visitor's page shows.
-    if (giving && sh.getRange(row, col_('Newsletter')).getValue() !== 'Confirmed') {
+    if (giving && gateOn_() && sh.getRange(row, col_('Newsletter')).getValue() !== 'Confirmed') {
       require_(ghostSecret_(), 'The blog check is not set up yet (run ghostWebhookSetup and add the webhooks in Ghost).');
       require_(blogConfirmed_(sh.getRange(row, col_('Email')).getValue()),
         'Email not confirmed yet. Ask them to tap the link in the Kleros blog email, then try again.');
@@ -608,6 +608,15 @@ function rematchAll() {
 //                  "last seen" (once a day), which Ghost reports as an edit.
 // Apps Script can't read Ghost's signature header, so the webhook URL carries a secret: GHOST_WEBHOOK_SECRET,
 // made by ghostWebhookSetup. Strict on purpose: until it exists nobody gets through.
+//
+// The switch (Script property BLOG_GATE, flipped by blogGateOff / blogGateOn): "off" means the booth doesn't wait
+// for that confirmation. Visitors reach the final screen and merch right after checking in. Only this site's
+// waiting step changes: Ghost still emails them and subscribes them only once they tap the link (Kleros's double
+// opt-in is untouched), and a webhook confirmation still marks Newsletter = Confirmed.
+function gateOn_() {
+  return PropertiesService.getScriptProperties().getProperty('BLOG_GATE') !== 'off';
+}
+
 function ghostSecret_() {
   return String(PropertiesService.getScriptProperties().getProperty('GHOST_WEBHOOK_SECRET') || '').trim();
 }
@@ -662,15 +671,14 @@ function blogConfirmed_(email) {
  * ({ x, linkedin, quiz, wrong }); `tg` says the page is waiting for the Telegram bot.
  */
 function verify_(d) {
-  if (!ghostSecret_()) return json_({ ok: true, confirmed: false, setup: false });   // no webhook yet: nobody passes
+  var gate = gateOn_();
+  if (gate && !ghostSecret_()) return json_({ ok: true, confirmed: false, setup: false });   // no webhook yet: nobody passes
   var sh = sheet_(LEADS);
   var row = d.id ? findRow_(sh, 'Client ID', d.id) : -1;
   if (row < 0) return json_({ ok: true, confirmed: false, pending: true });   // check-in not saved yet
-  var news = sh.getRange(row, col_('Newsletter'));
-  if (news.getValue() !== 'Confirmed') {
-    if (!blogConfirmed_(sh.getRange(row, col_('Email')).getValue())) return json_({ ok: true, confirmed: false });
-    news.setValue('Confirmed');
-  }
+  var news = sh.getRange(row, col_('Newsletter')), subscribed = news.getValue() === 'Confirmed';
+  if (!subscribed && blogConfirmed_(sh.getRange(row, col_('Email')).getValue())) { news.setValue('Confirmed'); subscribed = true; }
+  if (!subscribed && gate) return json_({ ok: true, confirmed: false });
   var m = claim_(sh, row);
   if (m['Claim'] === 'Claimed') {
     var s = d.steps || {}, changes = {};
@@ -680,16 +688,19 @@ function verify_(d) {
     if (d.tg && m['Telegram check'] !== 'Joined') { var tg = tgConfig_(); if (tg) telegramUpdates_(tg); }
     m = merch_(sh, row, changes);
   }
-  return json_(status_(m));
+  var out = status_(m);
+  if (!subscribed) out.gate = false;   // the page then says "confirm your subscription in the email" instead of "you're subscribed"
+  return json_(out);
 }
 
 /* ---------------------------------------------------------- merch tiers */
 
-// Teal: checked in and confirmed the blog subscription. Purple: also joined the Kleros Telegram group (checked
-// by the bot) and tapped Follow on X and LinkedIn (counted on tap, not checked). Gold: also passed the Kleros 101
-// quiz on the page. The page shows the tier at the booth; the Sheet keeps it for the team.
+// Teal: checked in and confirmed the blog subscription (just checked in when BLOG_GATE is off). Purple: also
+// joined the Kleros Telegram group (checked by the bot) and tapped Follow on X and LinkedIn (counted on tap, not
+// checked). Gold: also passed the Kleros 101 quiz on the page. The page shows the tier at the booth; the Sheet
+// keeps it for the team.
 function tier_(m, newsletter) {
-  if (newsletter !== 'Confirmed' || m['Claim'] !== 'Claimed') return '';
+  if ((newsletter !== 'Confirmed' && gateOn_()) || m['Claim'] !== 'Claimed') return '';
   var social = m['Telegram check'] === 'Joined' && m['Followed X'] === 'Tapped' && m['Followed LinkedIn'] === 'Tapped';
   return !social ? 'Teal' : m['Kleros 101'] === 'Passed' ? 'Gold' : 'Purple';
 }
@@ -804,7 +815,7 @@ function tgUpdate_(cfg, sh, u) {
   if (row < 0) return tgSay_(cfg, from.id, 'Hi! I check that visitors to the Kleros booth at Devcon joined the Kleros Telegram group. Start from the check-in page: ' + cfg.site);
 
   var m = merch_(sh, row);
-  if (sh.getRange(row, col_('Newsletter')).getValue() !== 'Confirmed') return tgSay_(cfg, from.id, 'Confirm your email on the check-in page first, then tap the Telegram button there again.');
+  if (gateOn_() && sh.getRange(row, col_('Newsletter')).getValue() !== 'Confirmed') return tgSay_(cfg, from.id, 'Confirm your email on the check-in page first, then tap the Telegram button there again.');
   if (m['Claim'] === 'Already claimed') return tgSay_(cfg, from.id, 'This check-in was already claimed: one merch per person.');
   if (m['Telegram check'] === 'Joined') return tgSay_(cfg, from.id, '✅ You’re already verified. Switch back to your browser to see your merch tier.');
   var who = { 'Telegram ID': from.id, 'Telegram account': text_(from.username ? '@' + from.username : [from.first_name, from.last_name].join(' ').trim()) };
@@ -868,9 +879,21 @@ function ghostWebhookSetup() {
   Logger.log('Ghost webhook target URL (member.added and member.edited): ' + WEB_APP_URL + '?hook=ghost&secret=' + ghostSecret_());
 }
 
+/** The booth doesn't wait for the blog confirmation (Ghost's own double opt-in is unchanged). */
+function blogGateOff() {
+  PropertiesService.getScriptProperties().setProperty('BLOG_GATE', 'off');
+  Logger.log('Blog gate OFF: visitors reach the final screen right after checking in. Ghost still asks them to confirm by email.');
+}
+
+/** Back to waiting for the blog confirmation before the final screen. */
+function blogGateOn() {
+  PropertiesService.getScriptProperties().deleteProperty('BLOG_GATE');
+  Logger.log('Blog gate ON: visitors reach the final screen once Ghost reports their confirmation.');
+}
+
 /** Run from the editor: the last 10 Ghost webhook calls and how each went (no secrets or emails in it). */
 function ghostWebhookStatus() {
-  Logger.log('Webhook secret set: ' + !!ghostSecret_());
+  Logger.log('Blog gate: ' + (gateOn_() ? 'ON (waits for confirmation)' : 'OFF (no waiting)') + '. Webhook secret set: ' + !!ghostSecret_());
   JSON.parse(PropertiesService.getScriptProperties().getProperty('GHOST_HOOK_LOG') || '[]').forEach(function (x) { Logger.log(JSON.stringify(x)); });
 }
 
