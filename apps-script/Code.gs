@@ -415,14 +415,13 @@ function respond_(handler) {
   catch (err) { return json_({ ok: false, error: err instanceof RequireError_ ? err.message : String(err) }); }
 }
 
-// Last row holding a lead. Based on the Ticket column, because the Merch checkboxes
-// make Google treat every pre-formatted row as "used".
+// Last row holding a lead. Based on the Ticket column, because the Merch checkboxes make Google treat every
+// pre-formatted row as "used". Ctrl+Up from the bottom of that column: one lookup however many rows are
+// pre-formatted (reading the whole column took ~3 s per call with 10,000 rows).
 function lastRow_(sh) {
-  var n = sh.getLastRow();
-  if (n < 3) return 2;
-  var vals = sh.getRange(3, col_('Ticket'), n - 2, 1).getValues();
-  for (var i = vals.length - 1; i >= 0; i--) if (vals[i][0] !== '' && vals[i][0] !== null) return i + 3;
-  return 2;
+  var bottom = sh.getRange(sh.getMaxRows(), col_('Ticket'));
+  if (bottom.getValue() !== '') return bottom.getRow();   // table filled to the very last row
+  return Math.max(2, bottom.getNextDataCell(SpreadsheetApp.Direction.UP).getRow());
 }
 
 function findRow_(sh, header, value) {
@@ -504,9 +503,9 @@ function checkIn_(d) {
   v['Source'] = text_(d.source); v['Event'] = text_(d.event); v['Client ID'] = text_(d.id);
 
   var row = lastRow_(sh) + 1;
-  if (row > sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), 1000);
+  // Setup gives CAPACITY rows their Merch checkbox; rows added past that get theirs here.
+  if (row > sh.getMaxRows()) { sh.insertRowsAfter(sh.getMaxRows(), 1000); sh.getRange(row, col_('Merch given'), 1000, 1).insertCheckboxes(); }
   sh.getRange(row, 1, 1, HEADERS.length).setValues([HEADERS.map(function (h) { return v.hasOwnProperty(h) ? v[h] : ''; })]);
-  sh.getRange(row, col_('Merch given')).insertCheckboxes();
   return json_({ ok: true, ticket: d.ticket });
 }
 
