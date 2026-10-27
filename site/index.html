@@ -1206,7 +1206,7 @@
       .then(function (res) {
         if (doneRec !== rec || !res.ok || !res.confirmed) return;
         applyStatus(rec, res);
-        keep(rec); renderMerch(rec);
+        keep(rec); renderMerch(rec); renderQuiz(rec);
       })
       .catch(function () {})
       .then(function () {
