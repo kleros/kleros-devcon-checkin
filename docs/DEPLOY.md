@@ -19,7 +19,7 @@ The printed booth QR codes point to devcon.kleros.io, so this must be live befor
 
 ## 2. Backend (Google Apps Script)
 
-Already deployed (web app version 14), owned by weiwei@kleros.io. Nothing to do unless the code changes. To change it: paste `backend/Code.gs` from this package (or `bash scripts/apps-script-bundle.sh | pbcopy` from the repo) over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › New version › Deploy*. The URL stays the same.
+Already deployed (web app version 15), owned by weiwei@kleros.io. Nothing to do unless the code changes. To change it: paste `backend/Code.gs` from this package (or `bash scripts/apps-script-bundle.sh | pbcopy` from the repo) over everything in the editor, save, then *Deploy › Manage deployments › ✏️ › New version › Deploy*. The URL stays the same.
 
 ## 3. Keys (Apps Script › Project settings › Script properties)
 
@@ -28,7 +28,7 @@ Already deployed (web app version 14), owned by weiwei@kleros.io. Nothing to do 
 | `GHOST_WEBHOOK_SECRET` | Made by the code: run `ghostWebhookSetup`, which logs the webhook target URL | Ghost admin › Settings › Integrations › custom integration "Devcon booth" › add webhooks *Member added* and *Member edited*, both with that URL |
 | `TELEGRAM_BOT_TOKEN` | @KlerosDevconBot's token from @BotFather | `telegramSetup` |
 
-No Ghost API key is needed: Ghost calls the backend, never the other way round. Without the webhooks nobody gets past "Confirm your email"; without the bot token nobody reaches Purple or Gold. The webhook URL and the token are secrets: share them only in private messages.
+No Ghost API key is needed: Ghost calls the backend, never the other way round. The booth currently doesn't wait for the email confirmation (`blogGateOff`; `blogGateOn` turns the wait back on); Ghost's own double opt-in is unchanged either way. Without the webhooks nobody gets past "Confirm your email"; without the bot token nobody reaches Purple or Gold. The webhook URL and the token are secrets: share them only in private messages.
 
 ## 4. Check
 
