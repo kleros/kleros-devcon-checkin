@@ -559,7 +559,7 @@ function get_(p) {
       'Already claimed: this email or Telegram account got merch on another check-in.');
     // Merch only once the visitor has confirmed their blog subscription, as Ghost reported it, so it never
     // depends on what the visitor's page shows.
-    if (giving && gateOn_() && sh.getRange(row, col_('Newsletter')).getValue() !== 'Confirmed') {
+    if (giving && gateOn_() && sh.getRange(row, col_('Newsletter')).getValue() === 'Yes') {
       require_(ghostSecret_(), 'The blog check is not set up yet (run ghostWebhookSetup and add the webhooks in Ghost).');
       require_(blogConfirmed_(sh.getRange(row, col_('Email')).getValue()),
         'Email not confirmed yet. Ask them to tap the link in the Kleros blog email, then try again.');
@@ -639,7 +639,7 @@ function ghostHook_(e, p) {
   if (last >= 3) {
     var emails = sh.getRange(3, col_('Email'), last - 2, 1).getValues(), news = sh.getRange(3, col_('Newsletter'), last - 2, 1).getValues();
     emails.forEach(function (r, i) {
-      if (String(r[0]).trim().toLowerCase() === email && news[i][0] !== 'Confirmed') { sh.getRange(i + 3, col_('Newsletter')).setValue('Confirmed'); marked++; }
+      if (String(r[0]).trim().toLowerCase() === email && news[i][0] === 'Yes') { sh.getRange(i + 3, col_('Newsletter')).setValue('Confirmed'); marked++; }
     });
   }
   hookLog_({ result: 'ok', event: d.event, checkInsMarked: marked });
@@ -671,13 +671,14 @@ function blogConfirmed_(email) {
  */
 function verify_(d) {
   var gate = gateOn_();
-  if (gate && !ghostSecret_()) return json_({ ok: true, confirmed: false, setup: false });   // no webhook yet: nobody passes
   var sh = sheet_(LEADS);
   var row = d.id ? findRow_(sh, 'Client ID', d.id) : -1;
   if (row < 0) return json_({ ok: true, confirmed: false, pending: true });   // check-in not saved yet
-  var news = sh.getRange(row, col_('Newsletter')), subscribed = news.getValue() === 'Confirmed';
-  if (!subscribed && blogConfirmed_(sh.getRange(row, col_('Email')).getValue())) { news.setValue('Confirmed'); subscribed = true; }
-  if (!subscribed && gate) return json_({ ok: true, confirmed: false });
+  // The blog box is optional. Only visitors who ticked it ("Yes", until Ghost confirms) can be kept waiting;
+  // "No" never waits, and "Confirmed" is done.
+  var news = sh.getRange(row, col_('Newsletter')), asked = news.getValue() === 'Yes';
+  if (asked && blogConfirmed_(sh.getRange(row, col_('Email')).getValue())) { news.setValue('Confirmed'); asked = false; }
+  if (asked && gate) return json_(ghostSecret_() ? { ok: true, confirmed: false } : { ok: true, confirmed: false, setup: false });
   var m = claim_(sh, row);
   if (m['Claim'] === 'Claimed') {
     var s = d.steps || {}, changes = {};
@@ -688,18 +689,18 @@ function verify_(d) {
     m = merch_(sh, row, changes);
   }
   var out = status_(m);
-  if (!subscribed) out.gate = false;   // the page then says "confirm your subscription in the email" instead of "you're subscribed"
+  if (asked) out.gate = false;   // the page then says "confirm your subscription in the email" instead of "you're subscribed"
   return json_(out);
 }
 
 /* ---------------------------------------------------------- merch tiers */
 
-// Teal: checked in and confirmed the blog subscription (just checked in when BLOG_GATE is off). Purple: also
+// Teal: checked in (if they ticked the blog box and BLOG_GATE is on, also confirmed the email). Purple: also
 // joined the Kleros Telegram group (checked by the bot) and tapped Follow on X and LinkedIn (counted on tap, not
 // checked). Gold: also passed the Kleros 101 quiz on the page. The page shows the tier at the booth; the Sheet
 // keeps it for the team.
 function tier_(m, newsletter) {
-  if ((newsletter !== 'Confirmed' && gateOn_()) || m['Claim'] !== 'Claimed') return '';
+  if ((newsletter === 'Yes' && gateOn_()) || m['Claim'] !== 'Claimed') return '';
   var social = m['Telegram check'] === 'Joined' && m['Followed X'] === 'Tapped' && m['Followed LinkedIn'] === 'Tapped';
   return !social ? 'Teal' : m['Kleros 101'] === 'Passed' ? 'Gold' : 'Purple';
 }
@@ -814,7 +815,7 @@ function tgUpdate_(cfg, sh, u) {
   if (row < 0) return tgSay_(cfg, from.id, 'Hi! I check that visitors to the Kleros booth at Devcon joined the Kleros Telegram group. Start from the check-in page: ' + cfg.site);
 
   var m = merch_(sh, row);
-  if (gateOn_() && sh.getRange(row, col_('Newsletter')).getValue() !== 'Confirmed') return tgSay_(cfg, from.id, 'Confirm your email on the check-in page first, then tap the Telegram button there again.');
+  if (gateOn_() && sh.getRange(row, col_('Newsletter')).getValue() === 'Yes') return tgSay_(cfg, from.id, 'Confirm your email on the check-in page first, then tap the Telegram button there again.');
   if (m['Claim'] === 'Already claimed') return tgSay_(cfg, from.id, 'This check-in was already claimed: one merch per person.');
   if (m['Telegram check'] === 'Joined') return tgSay_(cfg, from.id, '✅ You’re already verified. Switch back to your browser to see your merch tier.');
   var who = { 'Telegram ID': from.id, 'Telegram account': text_(from.username ? '@' + from.username : [from.first_name, from.last_name].join(' ').trim()) };
