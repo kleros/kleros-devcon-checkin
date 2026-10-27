@@ -12,6 +12,7 @@
  * Tabs built by setup():
  *   Read me          what everything means
  *   Leads            master table, one row per person (the only tab anyone writes to)
+ *   Hot leads        "Connect with the Kleros team" requests (site/connect.html), for the team to follow up
  *   Priority queue   everyone, best leads first
  *   By pipeline      one block per Kleros track (focus pipelines first), then Other
  *   By level         Decision-maker / Influencer / Practitioner / Community
@@ -29,6 +30,7 @@
  *   POST {action:'verify', id[, steps, tg]}        page polls: blog subscription confirmed? merch tier, Telegram,
  *                                                  already claimed. Also records the page's merch steps.
  *   POST ?hook=ghost&secret=S {Ghost webhook}      Ghost: member.added / member.edited (see "blog gate")
+ *   POST {action:'connect', rid, name, company, email, topics, project, …}   Connect page → Hot leads tab
  */
 
 // Drive folder the database lives in ("Kleros Booth Check-in · Devcon 2026" in the work Drive).
@@ -117,7 +119,8 @@ function setup() {
   buildReadme_();
   tidyDrive_();
   // Drop the default empty tab and put the tabs in reading order.
-  var order = ['Read me', LEADS, 'Priority queue', 'By pipeline', 'By level', 'Flags', 'Research queue', 'Dashboard', LOG];
+  hotSheet_();
+  var order = ['Read me', LEADS, HOT, 'Priority queue', 'By pipeline', 'By level', 'Flags', 'Research queue', 'Dashboard', LOG];
   ss_().getSheets().forEach(function (sh) { if (order.indexOf(sh.getName()) < 0 && ss_().getSheets().length > 1) ss_().deleteSheet(sh); });
   order.forEach(function (name, i) { ss_().setActiveSheet(sheet_(name)); ss_().moveActiveSheet(i + 1); });
   ss_().setActiveSheet(sheet_(LEADS));
@@ -289,6 +292,7 @@ function buildViews_() {
 }
 
 function buildDashboard_() {
+  hotSheet_();   // the Hot leads count below reads it
   var sh = sheet_('Dashboard'); sh.clear();
   var lr = "'" + LEADS + "'!";
   var colRef = function (h) { return lr + L_(h) + '3:' + L_(h); };
@@ -299,6 +303,7 @@ function buildDashboard_() {
     ['Hot', '=COUNTIF(' + colRef('Priority') + ',"Hot")'],
     ['Decision-makers', '=COUNTIF(' + colRef('Level') + ',"Decision-maker")'],
     ['Want a call', '=COUNTIF(' + colRef('Wants call') + ',"Yes")'],
+    ['Hot leads (Connect form)', "=COUNTA('" + HOT + "'!A2:A)"],
     ['Flagged by research', '=COUNTIF(' + colRef('Flags') + ',"<>")'],
     ['Research pending', '=COUNTIF(' + colRef('Research status') + ',"Pending")'],
     ['Merch given', '=COUNTIF(' + colRef('Merch given') + ',TRUE)'],
@@ -355,7 +360,8 @@ function buildReadme_() {
     ['Decision-maker: founders, C-suite, VP/Head/Director. Influencer: managers, senior BD/product. Practitioner: individual contributors. Community: students.'],
     [''],
     ['Rules'],
-    ['Edit only the Leads tab. Every other tab is a formula view and refreshes by itself.'],
+    ['Edit only the Leads tab, and in Hot leads the Follow-up owner, Status and Team notes. Every other tab is a formula view and refreshes by itself.'],
+    ['Hot leads: people who tapped "Connect with the Kleros team" and asked for a follow-up. If they also checked in, their Leads row says Wants call = Yes.'],
     ['Agents write only the Background research columns, and log every write in Agent log.'],
     ['Research uses public professional information only (company sites, LinkedIn headline, press, GitHub, X). No personal life, no sensitive data.'],
     ['Delete the whole row if someone asks to be removed.'],
@@ -456,7 +462,7 @@ function doPost(e) {
     var lock = LockService.getScriptLock();
     lock.waitLock(30000);   // a busy timeout throws: respond_ answers with it and the page retries
     try {
-      return d.action === 'enrich' ? enrich_(d) : checkIn_(d);
+      return d.action === 'enrich' ? enrich_(d) : d.action === 'connect' ? connect_(d) : checkIn_(d);
     } finally {
       lock.releaseLock();
     }
@@ -578,23 +584,72 @@ function get_(p) {
   return json_({ ok: true, rows: rowsAsObjects_(sh) });
 }
 
+// Matching for one Leads row's values (a row from getValues).
+function matchRow_(r) {
+  var g = function (h) { return r[col_(h) - 1]; };
+  return matchLead({ company: g('Company'), position: g('Role'), seniority: g('Seniority'),
+    interests: String(g('Interests') || ''), building: g('Working on'), otherInterest: g('Other interest'),
+    klerosUse: g('Kleros use case idea'), wantsCall: g('Wants call') });
+}
+
 /** Menu action: recompute matching for every row after tuning Matching.gs. */
 function rematchAll() {
   var sh = sheet_(LEADS);
   var last = lastRow_(sh);
   if (last < 3) return;
   var data = sh.getRange(3, 1, last - 2, HEADERS.length).getValues();
-  var g = function (r, h) { return r[col_(h) - 1]; };
   var fit = [], ranks = [];
   data.forEach(function (r) {
-    var m = matchLead({ company: g(r, 'Company'), position: g(r, 'Role'), seniority: g(r, 'Seniority'),
-      interests: String(g(r, 'Interests') || ''), building: g(r, 'Working on'), otherInterest: g(r, 'Other interest'),
-      klerosUse: g(r, 'Kleros use case idea'), wantsCall: g(r, 'Wants call') });
+    var m = matchRow_(r);
     fit.push(fitColumns_(m));
     ranks.push([m.priorityRank, m.levelRank]);
   });
   sh.getRange(3, col_('Pipeline'), fit.length, fit[0].length).setValues(fit);
   sh.getRange(3, col_('Priority rank'), ranks.length, 2).setValues(ranks);
+}
+
+/* ------------------------------------------------------------ hot leads */
+
+// "Connect with the Kleros team" (site/connect.html): people who want a real follow-up, not just merch. One row
+// each in the Hot leads tab, for the team to work through. If they also checked in with the same email, that
+// Leads row gets Wants call = Yes and fresh matching, so it shows as Hot in every view and on the dashboard.
+var HOT = 'Hot leads';
+var HOT_HEADERS = ['Sent at', 'Name', 'Company', 'Role', 'Email', 'Telegram', 'LinkedIn', 'Wants to talk about', 'Their project',
+  'Timing', 'Reach them by', 'Talked to at the booth', 'Check-in ticket', 'Follow-up owner', 'Status', 'Team notes', 'Request ID'];
+
+function hotSheet_() {
+  var sh = sheet_(HOT);
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, HOT_HEADERS.length).setValues([HOT_HEADERS]).setFontWeight('bold').setBackground('#efe3ff');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function connect_(d) {
+  var email = String(d.email || '').trim();
+  require_(d.rid && d.name && d.company && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email), 'invalid request');
+  var sh = hotSheet_(), last = sh.getLastRow();
+  if (last >= 2 && sh.getRange(2, HOT_HEADERS.length, last - 1, 1).getValues().some(function (r) { return String(r[0]) === String(d.rid); })) {
+    return json_({ ok: true, duplicate: true });   // the page retrying a request that was already saved
+  }
+  // Their latest check-in with the same email, if any.
+  var leads = sheet_(LEADS), lastLead = lastRow_(leads), row = -1, want = email.toLowerCase();
+  if (lastLead >= 3) {
+    var emails = leads.getRange(3, col_('Email'), lastLead - 2, 1).getValues();
+    for (var i = emails.length - 1; i >= 0 && row < 0; i--) if (String(emails[i][0]).trim().toLowerCase() === want) row = i + 3;
+  }
+  var ticket = row > 0 ? leads.getRange(row, col_('Ticket')).getValue() : '';
+  sh.appendRow([new Date(), text_(d.name), text_(d.company), text_(d.position), text_(email),
+    d.telegram ? text_('@' + String(d.telegram).replace(/^@/, '')) : '', text_(d.linkedin), text_((d.topics || []).join(', ')),
+    text_(d.project), text_(d.timing), text_(d.reach), text_(d.met), ticket, '', 'New', '', text_(d.rid)]);
+  if (row > 0) {
+    leads.getRange(row, col_('Wants call')).setValue('Yes');
+    var m = matchRow_(leads.getRange(row, 1, 1, HEADERS.length).getValues()[0]);
+    leads.getRange(row, col_('Pipeline'), 1, GROUPS[2].cols.length).setValues([fitColumns_(m)]);
+    leads.getRange(row, col_('Priority rank'), 1, 2).setValues([[m.priorityRank, m.levelRank]]);
+  }
+  return json_({ ok: true, ticket: ticket });
 }
 
 /* ------------------------------------------------------------ blog gate */
