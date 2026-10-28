@@ -49,7 +49,6 @@ EYE_R = (0.45, 0.22, 0.32)
 
 HEADLINE = "Check in with Kleros"
 PERK = "Claim your limited-edition merch"
-CAPTION = "Scan with your phone camera"
 DOMAIN = re.sub(r"^https?://", "", URL).rstrip("/")
 
 
@@ -529,7 +528,6 @@ def poster(W=1800, H=2400):
     framed_qr_card(img, (W - card) // 2, int(y), card, qr)
     y += card
     centered(img, y + s(62), DOMAIN, mono(s(66)), WHITE, tracking=4 * k)
-    centered(img, y + s(158), CAPTION, urbanist(s(40), "Medium"), MUTED)
     tagline(img, H - s(175), urbanist(s(32), "SemiBold"))
     return img.convert("RGB")
 
