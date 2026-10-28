@@ -564,6 +564,15 @@ def rrect(x, y, s, r):
             f"H{x + r}A{r} {r} 0 0 1 {x} {y + s - r}V{y + r}A{r} {r} 0 0 1 {x + r} {y}Z")
 
 
+def same_url(text, url):
+    """Does a decoded QR open `url`? Scheme and host ignore case, and a bare trailing / doesn't matter:
+    designed codes often encode HTTPS://DEVCON.KLEROS.IO/ in capitals, which makes the code less dense."""
+    from urllib.parse import urlsplit
+    a, b = urlsplit(text.strip()), urlsplit(url.strip())
+    key = lambda u: (u.scheme.lower(), u.netloc.lower(), u.path.rstrip("/"), u.query)
+    return key(a) == key(b)
+
+
 def self_check(paths):
     """Decode each file at phone-ish sizes with OpenCV and ZXing (the engine in many phone
     scanners), the ZXing pass slightly blurred like a camera frame. Fails loudly on a miss."""
@@ -585,12 +594,12 @@ def self_check(paths):
         for scale in scales:
             small = cv2.resize(im, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
             try:
-                cv_hits += det.detectAndDecode(small)[0] == URL
+                cv_hits += same_url(det.detectAndDecode(small)[0], URL)
             except cv2.error:
                 pass
             if zxingcpp:
                 found = zxingcpp.read_barcodes(cv2.GaussianBlur(small, (0, 0), 1.0))
-                zx_hits += bool(found) and found[0].text == URL
+                zx_hits += bool(found) and same_url(found[0].text, URL)
         # OpenCV is the pickier decoder and can miss one odd size; ZXing must read every size.
         ok = cv_hits >= len(scales) - 1 and (not zxingcpp or zx_hits == len(scales))
         print(("scans OK  " if ok else "NO SCAN   ") + f"{os.path.basename(p)}  "
