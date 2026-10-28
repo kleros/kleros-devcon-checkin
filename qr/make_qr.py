@@ -429,8 +429,41 @@ def gradient_gem(img, cx, y, width):
     return y + h
 
 
+# Designed QR art (--qr-art) brings its own dark margin as the border, so it goes on the page without the
+# white card. The code and its light frame sit inside ART_CORE of each edge; outside that, the dark nebula
+# fades into the poster while the bright gold ornaments and light rays stay, tapering off before the edge.
+ART_CORE = 0.068
+
+
+def art_qr(img, x0, y0, size):
+    art = Image.open(QR_ART).convert("RGB").resize((size, size), Image.LANCZOS)
+    glow = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    sp = size * 0.07
+    ImageDraw.Draw(glow).ellipse((x0 - sp, y0 - sp * 0.6, x0 + size + sp, y0 + size + sp * 1.2), fill=(120, 40, 255, 108))
+    glow = glow.filter(ImageFilter.GaussianBlur(size // 11))
+    img.alpha_composite(glow)
+    grain = Image.effect_noise(img.size, 22).convert("RGBA")   # dithers the glow so it doesn't band in print
+    grain.putalpha(glow.getchannel("A").point(lambda v: v * 24 // 255))
+    img.alpha_composite(grain)
+    c = size * ART_CORE
+    core = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(core).rectangle((c, c, size - c, size - c), fill=255)
+    core = core.filter(ImageFilter.GaussianBlur(size * 0.004))
+    lo, hi = 45, 125
+    luma = art.convert("L").point(lambda v: 0 if v < lo else 255 if v > hi else (v - lo) * 255 // (hi - lo))
+    fade = Image.new("L", (size, size), 0)       # full until the outer half of the margin, ~0 at the edge
+    ImageDraw.Draw(fade).rectangle((c * 0.35, c * 0.35, size - c * 0.35, size - c * 0.35), fill=255)
+    fade = fade.filter(ImageFilter.GaussianBlur(c * 0.15))
+    art = art.convert("RGBA")
+    art.putalpha(ImageChops.lighter(core, ImageChops.multiply(luma, fade)))
+    img.alpha_composite(art, (int(x0), int(y0)))
+
+
 def framed_qr_card(img, x0, y0, card, qr):
-    """White QR card inside a thin gold-to-pink-to-violet ring, with a violet glow behind."""
+    """White QR card inside a thin gold-to-pink-to-violet ring, with a violet glow behind. Designed QR art
+    goes on the page instead (art_qr)."""
+    if QR_ART:
+        return art_qr(img, x0, y0, card)
     ring = max(6, card // 130)
     glow = Image.new("RGBA", img.size, (0, 0, 0, 0))
     ImageDraw.Draw(glow).rounded_rectangle((x0 - 30, y0 - 10, x0 + card + 30, y0 + card + 50), radius=card // 12, fill=(120, 40, 255, 150))
@@ -513,7 +546,10 @@ def square():
     gradient_headline(img, 200, HEADLINE, urbanist(112))
     y = perk_pill(img, 362, PERK, urbanist(38, "SemiBold"))
     card, qr = 820, 676
-    framed_qr_card(img, (W - card) // 2, y + 52, card, qr)
+    if QR_ART:                                    # a little smaller: its pendant reaches further down than a card
+        art_qr(img, (W - card * 0.96) // 2, y + 52, int(card * 0.96))
+    else:
+        framed_qr_card(img, (W - card) // 2, y + 52, card, qr)
     centered(img, y + 52 + card + 46, DOMAIN, mono(54), WHITE, tracking=3)
     return img.convert("RGB")
 
