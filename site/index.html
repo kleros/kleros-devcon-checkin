@@ -39,18 +39,16 @@
     min-height: 100dvh;
     font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     color: var(--text);
-    background:
-      radial-gradient(120% 60% at 50% 110%, rgba(222, 79, 208, .35), transparent 60%),
-      radial-gradient(90% 50% at 85% 0%, rgba(127, 240, 224, .10), transparent 60%),
-      linear-gradient(180deg, var(--night) 0%, var(--night-2) 45%, var(--dusk) 100%);
     background-color: var(--night);
-    background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
   }
-  /* starfield */
+  /* Sky and starfield on one fixed layer that the browser paints once and then just keeps in place. A fixed
+     body background (background-attachment: fixed) repaints the whole screen on every scroll step and made
+     fast scrolling stutter. 100lvh: the layer doesn't resize when a phone's address bar slides away. */
   body::before {
     content: "";
-    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100lvh;
+    pointer-events: none; z-index: -1; transform: translateZ(0);
     background-image:
       radial-gradient(1px 1px at 12% 18%, #fff8 50%, transparent 51%),
       radial-gradient(1px 1px at 72% 9%, #fff6 50%, transparent 51%),
@@ -59,7 +57,10 @@
       radial-gradient(1px 1px at 55% 26%, #fff6 50%, transparent 51%),
       radial-gradient(1.5px 1.5px at 6% 66%, #fff5 50%, transparent 51%),
       radial-gradient(1px 1px at 94% 72%, #fff5 50%, transparent 51%),
-      radial-gradient(1px 1px at 44% 84%, #fff4 50%, transparent 51%);
+      radial-gradient(1px 1px at 44% 84%, #fff4 50%, transparent 51%),
+      radial-gradient(120% 60% at 50% 110%, rgba(222, 79, 208, .35), transparent 60%),
+      radial-gradient(90% 50% at 85% 0%, rgba(127, 240, 224, .10), transparent 60%),
+      linear-gradient(180deg, var(--night) 0%, var(--night-2) 45%, var(--dusk) 100%);
   }
   .frame { position: fixed; inset: 10px; pointer-events: none; z-index: 0; border: 1px solid var(--gold-dim); border-radius: 6px; }
   .frame svg { position: absolute; width: 34px; height: 34px; color: var(--gold); opacity: .8; }
@@ -70,13 +71,15 @@
 
   /* Floating Kleros icosahedrons along the sides */
   .ico-float { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
-  .ico-float svg { fill: currentColor; position: absolute; display: block; animation: drift var(--dur, 30s) linear infinite; filter: drop-shadow(0 0 14px currentColor); will-change: transform; }
+  /* Each <i> drifts; the glow sits on the svg inside, so it's drawn once and the moving layer only carries it. */
+  .ico-float i { position: absolute; display: block; animation: drift var(--dur, 30s) linear infinite; will-change: transform; }
+  .ico-float svg { display: block; width: 100%; height: auto; fill: currentColor; filter: drop-shadow(0 0 14px currentColor); }
   .ico-float .i2, .ico-float .i4 { animation-direction: reverse; }
-  .ico-float .i1 { width: 92px; top: 13%; left: -28px; color: var(--gold); opacity: .32; --dur: 26s; animation-delay: -4s; }
-  .ico-float .i2 { width: 150px; top: 44%; right: -62px; color: #b77bff; opacity: .3; --dur: 38s; animation-delay: -11s; }
-  .ico-float .i3 { width: 56px; top: 71%; left: -10px; color: var(--teal); opacity: .36; --dur: 22s; animation-delay: -7s; }
-  .ico-float .i4 { width: 70px; top: 6%; right: -18px; color: var(--teal); opacity: .26; --dur: 30s; animation-delay: -15s; }
-  .ico-float .i5 { width: 118px; top: 86%; right: -40px; color: var(--gold); opacity: .24; --dur: 34s; animation-delay: -20s; }
+  .ico-float .i1 { width: 92px; top: 13%; left: -28px; color: var(--gold); opacity: .27; --dur: 26s; animation-delay: -4s; }
+  .ico-float .i2 { width: 150px; top: 44%; right: -62px; color: #b77bff; opacity: .26; --dur: 38s; animation-delay: -11s; }
+  .ico-float .i3 { width: 56px; top: 71%; left: -10px; color: var(--teal); opacity: .31; --dur: 22s; animation-delay: -7s; }
+  .ico-float .i4 { width: 70px; top: 6%; right: -18px; color: var(--teal); opacity: .22; --dur: 30s; animation-delay: -15s; }
+  .ico-float .i5 { width: 118px; top: 86%; right: -40px; color: var(--gold); opacity: .2; --dur: 34s; animation-delay: -20s; }
   @media (min-width: 760px) {
     .ico-float .i1 { width: 150px; left: 6%; } .ico-float .i2 { width: 220px; right: 5%; }
     .ico-float .i3 { width: 90px; left: 12%; } .ico-float .i4 { width: 100px; right: 14%; } .ico-float .i5 { width: 160px; right: 10%; }
@@ -103,9 +106,9 @@
 
   .hero { text-align: center; margin: 30px 0 22px; }
   /* The Kleros mark with a slow, small sway (no full spins: they read as distracting). */
-  .gem { width: 92px; height: 82px; margin: 0 auto 18px; display: block; overflow: visible;
-    filter: drop-shadow(0 0 14px rgba(183, 123, 255, .65)) drop-shadow(0 0 34px rgba(127, 240, 224, .28));
-    animation: gem-turn 14s ease-in-out infinite; transform-origin: 50% 52%; }
+  .gem-sway { display: block; width: 92px; margin: 0 auto 18px; animation: gem-turn 14s ease-in-out infinite; transform-origin: 50% 52%; will-change: transform; }
+  .gem { width: 92px; height: 82px; display: block; overflow: visible;   /* glow drawn once; .gem-sway moves it */
+    filter: drop-shadow(0 0 14px rgba(183, 123, 255, .65)) drop-shadow(0 0 34px rgba(127, 240, 224, .28)); }
   @keyframes gem-turn {
     0%, 100% { transform: rotate(-8deg) scale(1); }
     50% { transform: rotate(8deg) scale(1.04); }
@@ -131,11 +134,12 @@
   .lanes li + li::before { content: "◆"; color: var(--gold); font-size: 7px; margin: 0 9px; vertical-align: 2px; }
 
   .card {
-    background: linear-gradient(180deg, rgba(255, 255, 255, .075), rgba(255, 255, 255, .035));
+    /* A faint violet veil softens the icosahedrons drifting behind. No backdrop blur: it re-blurred the moving
+       background on every frame and made fast scrolling stutter. */
+    background: linear-gradient(160deg, rgba(167, 139, 250, .07), transparent 70%), linear-gradient(180deg, rgba(255, 255, 255, .075), rgba(255, 255, 255, .035));
     border: 1px solid rgba(255, 255, 255, .12);
     border-radius: 22px; padding: 22px 18px 20px;
     box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .06);
-    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   }
 
   .field { margin-bottom: 14px; }
@@ -460,11 +464,11 @@
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="kleros-ico" viewBox="0 0 54 48"><path fill-rule="evenodd" clip-rule="evenodd" d="M42.6705 1.49354L15.7143 0.290039L0 19.9178L11.111 46.2282L38.2159 47.9398L53.6205 25.7715L42.6705 1.49354ZM15.9677 22.8233L35.5115 14.2859L32.6721 35.7602L15.9677 22.8233ZM17.6325 3.26712L33.2477 9.9924L14.3566 17.4282L17.6325 3.26712ZM12.3283 26.8772L29.2888 39.0155L12.7414 43.3351L12.3283 26.8772ZM39.341 13.9706L50.9078 25.6875L36.2702 36.5603L39.341 13.9706ZM18.9531 45.3993L33.2587 41.6249L35.7869 46.483L18.9531 45.3993ZM36.1174 40.3911L48.6481 31.0605L38.6111 45.2629L36.1174 40.3911ZM40.2718 9.8905L42.727 4.88647L49.3339 19.0971L40.2718 9.8905ZM23.7574 1.84743L39.6549 2.49187L36.8789 7.58677L23.7574 1.84743ZM2.27618 18.8892L13.412 4.8011L9.72714 20.47L2.27618 18.8892ZM1.78735 21.6281L9.27686 23.2116L9.5743 40.0592L1.78735 21.6281Z"/></symbol></defs></svg>
 <div class="ico-float" aria-hidden="true">
-  <svg class="i1" viewBox="0 0 54 48"><use href="#kleros-ico"/></svg>
-  <svg class="i2" viewBox="0 0 54 48"><use href="#kleros-ico"/></svg>
-  <svg class="i3" viewBox="0 0 54 48"><use href="#kleros-ico"/></svg>
-  <svg class="i4" viewBox="0 0 54 48"><use href="#kleros-ico"/></svg>
-  <svg class="i5" viewBox="0 0 54 48"><use href="#kleros-ico"/></svg>
+  <i class="i1"><svg viewBox="0 0 54 48"><use href="#kleros-ico"/></svg></i>
+  <i class="i2"><svg viewBox="0 0 54 48"><use href="#kleros-ico"/></svg></i>
+  <i class="i3"><svg viewBox="0 0 54 48"><use href="#kleros-ico"/></svg></i>
+  <i class="i4"><svg viewBox="0 0 54 48"><use href="#kleros-ico"/></svg></i>
+  <i class="i5"><svg viewBox="0 0 54 48"><use href="#kleros-ico"/></svg></i>
 </div>
 <div class="frame" aria-hidden="true">
   <svg class="tl" viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M5 33V5h28"/><path d="M9 33V9h24"/><path d="M5 5l9 9"/><rect x="11" y="11" width="6" height="6" transform="rotate(45 14 14)"/></svg>
@@ -481,12 +485,12 @@
 
   <section id="form-view">
     <div class="hero">
-      <svg class="gem" viewBox="0 0 54 48" role="img" aria-label="Kleros">
+      <span class="gem-sway"><svg class="gem" viewBox="0 0 54 48" role="img" aria-label="Kleros">
         <defs><linearGradient id="gem-fill" x1="0" y1="0" x2="54" y2="48" gradientUnits="userSpaceOnUse">
           <stop offset="0" stop-color="#f2c46d"/><stop offset=".45" stop-color="#ffffff"/><stop offset="1" stop-color="#b77bff"/>
         </linearGradient></defs>
         <use href="#kleros-ico" fill="url(#gem-fill)"/>
-      </svg>
+      </svg></span>
       <h1>Trust at Machine Speed</h1>
       <p class="lede">When your agents, markets or users disagree, <em>who decides?</em></p>
       <ul class="lanes" id="lanes" aria-label="Kleros focus areas"></ul>
