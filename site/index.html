@@ -131,6 +131,12 @@
   .team-cta small { display: block; margin-top: 2px; font-size: 12.5px; color: #4a4170; }
   .team-cta i { font-style: normal; font-size: 20px; color: #4d00b4; }
   .team-cta:hover { background: #fff; }
+  /* "Play Curate": a dark lit-edge card, unlike the paper Connect button. */
+  .game-cta { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 14px; padding: 14px 18px; border-radius: 16px; color: var(--text); text-decoration: none;
+    border: 1.5px solid transparent; background: linear-gradient(180deg, #2c1266, #150437) padding-box, linear-gradient(120deg, #c084ff, #27cdfe) border-box; }
+  .game-cta b { display: block; font: 700 16px Urbanist, Inter, sans-serif; }
+  .game-cta small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--muted); }
+  .game-cta i { font-style: normal; font-size: 20px; color: #27cdfe; }
   .lanes li + li::before { content: "◆"; color: var(--gold); font-size: 7px; margin: 0 9px; vertical-align: 2px; }
 
   .card {
@@ -694,6 +700,8 @@
       </div>
     </section>
 
+    <a class="game-cta" id="game-cta" href="/curate/"><span><b>How Kleros verification works!</b><small>Play the 90-second Curate game and win merch.</small></span><i aria-hidden="true">→</i></a>
+
     <div class="match blog" id="blog" hidden>
       <div class="kicker">Kleros blog</div>
       <p id="blog-text"></p>
@@ -1144,6 +1152,8 @@
     if (!MERCH) return;   // no tiers configured: the plain ticket
     $('levelup').hidden = !!m.claimed || KIOSK;   // a booth tablet resets after a few seconds: Teal only
     $('quiz').hidden = !!m.claimed || KIOSK || !QUIZ.length;
+    // a duplicate keeps the card (play for fun) but must not be promised merch
+    $('game-cta').querySelector('small').textContent = m.claimed ? 'Play the 90-second Curate game, just for fun: your merch went with your first check-in.' : 'Play the 90-second Curate game and win merch.';
     $('t-live').hidden = $('t-code').hidden = !!m.claimed;
     if (m.claimed) {
       t.setAttribute('data-tier', 'claimed');
@@ -1438,6 +1448,7 @@
   $('again').onclick = reset;
   // One check-in per phone: only a booth tablet (?kiosk=1) gets "Check in someone else".
   if (!KIOSK) $('again').hidden = true;
+  if (KIOSK) $('game-cta').hidden = true;   // a booth tablet resets after 12 s
 
   // Confirmation gate: the final screen only appears once the visitor has done every required step and
   // confirmed their Kleros blog subscription (the link in Ghost's own email). Ghost reports it to the backend

@@ -4,6 +4,32 @@
   Cache-Control: no-cache
 /quiz.js
   Cache-Control: no-cache
+/curate/settings.js
+  Cache-Control: no-cache
+/curate/decks.js
+  Cache-Control: no-cache
+/curate/rules.js
+  Cache-Control: no-cache
+/curate/objects.js
+  Cache-Control: no-cache
+/curate/gl.js
+  Cache-Control: no-cache
+/curate/credits.js
+  Cache-Control: no-cache
+/curate/rewards.js
+  Cache-Control: no-cache
+/curate/earn.js
+  Cache-Control: no-cache
+/curate/badge.js
+  Cache-Control: no-cache
+/staff/desk.js
+  Cache-Control: no-cache
+/staff
+  X-Robots-Tag: noindex
+/staff/*
+  X-Robots-Tag: noindex
+/curate/game.js
+  Cache-Control: no-cache
 /admin
   X-Robots-Tag: noindex
 /admin.html
